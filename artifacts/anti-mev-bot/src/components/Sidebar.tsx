@@ -14,6 +14,7 @@ type NavItem = {
   href: string;
   active?: boolean;
   children?: NavChild[];
+  defaultOpen?: boolean;
 };
 
 const navItems: NavItem[] = [
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { icon: ArrowRightLeft, label: "Market maker - Batch Swap", href: "#" },
   { 
     icon: Bot, label: "Anti-MEV Volume Bot🤖", href: "/", active: true,
+    defaultOpen: true,
     children: [
       { label: "Solana", href: "#" },
       { label: "ETH", href: "#" },
@@ -55,6 +57,16 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const [location] = useLocation();
+  const [openSections, setOpenSections] = React.useState<Record<number, boolean>>(
+    () => navItems.reduce((acc, item, i) => {
+      if (item.children) acc[i] = item.defaultOpen ?? false;
+      return acc;
+    }, {} as Record<number, boolean>)
+  );
+
+  const toggleSection = (idx: number) => {
+    setOpenSections(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
 
   return (
     <div className="w-64 h-screen bg-sidebar border-r border-sidebar-border flex flex-col hidden lg:flex sticky top-0">
@@ -64,12 +76,12 @@ export function Sidebar() {
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold shadow-[0_0_15px_rgba(0,208,133,0.4)]">
             CT
           </div>
-          <span className="font-display font-bold text-lg text-white">CoinTool</span>
+          <span className="font-bold text-lg text-white">CoinTool</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-muted-foreground ml-1">V3.0</span>
         </div>
       </div>
 
-      {/* Search mock */}
+      {/* Search */}
       <div className="p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -87,28 +99,33 @@ export function Sidebar() {
           <div key={i}>
             {item.children ? (
               <div className="mb-1">
-                <button className={cn(
-                  "w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  item.active ? "text-white" : "text-sidebar-foreground hover:bg-white/5 hover:text-white"
-                )}>
+                <button
+                  onClick={() => toggleSection(i)}
+                  className={cn(
+                    "w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    item.active ? "text-white" : "text-sidebar-foreground hover:bg-white/5 hover:text-white"
+                  )}
+                >
                   <div className="flex items-center gap-3">
                     <item.icon className={cn("w-4 h-4", item.active && "text-primary")} />
                     <span>{item.label}</span>
                   </div>
-                  <ChevronDown className="w-4 h-4 opacity-50" />
+                  <ChevronDown className={cn("w-4 h-4 opacity-50 transition-transform duration-200", openSections[i] && "rotate-180")} />
                 </button>
-                <div className="ml-9 mt-1 space-y-1 border-l border-white/5 pl-2">
-                  {item.children.map((child, j) => (
-                    <Link key={j} href={child.href} className={cn(
-                      "block px-3 py-2 rounded-lg text-sm transition-colors",
-                      child.active 
-                        ? "bg-primary/10 text-primary font-medium" 
-                        : "text-muted-foreground hover:text-white hover:bg-white/5"
-                    )}>
-                      {child.label}
-                    </Link>
-                  ))}
-                </div>
+                {openSections[i] && (
+                  <div className="ml-9 mt-1 space-y-1 border-l border-white/5 pl-2">
+                    {item.children.map((child, j) => (
+                      <Link key={j} href={child.href} className={cn(
+                        "block px-3 py-2 rounded-lg text-sm transition-colors",
+                        child.active 
+                          ? "bg-primary/10 text-primary font-medium" 
+                          : "text-muted-foreground hover:text-white hover:bg-white/5"
+                      )}>
+                        {child.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <Link href={item.href} className={cn(

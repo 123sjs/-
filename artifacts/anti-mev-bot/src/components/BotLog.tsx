@@ -5,14 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export function BotLog() {
   const { logs } = useBotStore();
-  const logEndRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    // Auto scroll to bottom
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [logs]);
 
   return (
     <div className="h-64 bg-black/60 rounded-xl border border-white/10 flex flex-col overflow-hidden">
@@ -32,13 +24,13 @@ export function BotLog() {
             {logs.map((log) => (
               <motion.div 
                 key={log.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
                 className="flex items-start gap-3 border-b border-white/5 pb-2"
               >
                 <span className="text-muted-foreground shrink-0">[{log.time}]</span>
                 <span className="text-blue-400 shrink-0">{log.wallet}</span>
-                <span className={log.action === 'Buy' ? "text-emerald-400 w-8" : "text-rose-400 w-8"}>{log.action}</span>
+                <span className={log.action === 'Buy' ? "text-emerald-400 w-8 shrink-0" : "text-rose-400 w-8 shrink-0"}>{log.action}</span>
                 <span className="text-white shrink-0">{log.amount} BNB</span>
                 <span className="text-muted-foreground truncate flex-1">{log.hash}</span>
                 {log.status === 'Success' ? (
@@ -50,7 +42,6 @@ export function BotLog() {
             ))}
           </AnimatePresence>
         )}
-        <div ref={logEndRef} />
       </div>
     </div>
   );

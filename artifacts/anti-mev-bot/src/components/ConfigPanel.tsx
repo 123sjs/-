@@ -4,8 +4,9 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Switch } from "./ui/switch";
-import { SiBinance } from "react-icons/si";
-import { Settings, Zap, Repeat, Search, Layers, Play, Square, Activity } from "lucide-react";
+import { AppDialog } from "./ui/app-dialog";
+import { SiBinance, SiEthereum, SiSolana } from "react-icons/si";
+import { Settings, Zap, Search, Layers, Play, Square, Activity, ChevronDown, Wifi, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DEX_OPTIONS = [
@@ -27,8 +28,146 @@ const AMOUNT_MODES: Array<{ id: BotConfig['amountMode']; label: string }> = [
 
 const GAS_MODES: Array<BotConfig['gasPriceMode']> = ['Fixed', 'Auto', 'Random'];
 
+type ChainOption = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  chainId: number;
+  icon: React.ComponentType<{ className?: string; size?: number; style?: React.CSSProperties }>;
+  color: string;
+  rpcs: Array<{ label: string; url: string; latencyMs: number }>;
+};
+
+const CHAINS: ChainOption[] = [
+  {
+    id: 'BSC', label: 'BSC Mainnet', shortLabel: 'BSC', chainId: 56,
+    icon: SiBinance, color: '#F3BA2F',
+    rpcs: [
+      { label: 'Binance Official', url: 'https://bsc-dataseed1.binance.org', latencyMs: 547 },
+      { label: 'Nodereal', url: 'https://bsc-mainnet.nodereal.io/v1/64a9df0874fb4a93b9d0a3849de012d3', latencyMs: 312 },
+      { label: 'Ankr', url: 'https://rpc.ankr.com/bsc', latencyMs: 283 },
+      { label: 'QuickNode', url: 'https://bsc.publicnode.com', latencyMs: 198 },
+    ]
+  },
+  {
+    id: 'ETH', label: 'Ethereum Mainnet', shortLabel: 'ETH', chainId: 1,
+    icon: SiEthereum, color: '#627EEA',
+    rpcs: [
+      { label: 'Cloudflare', url: 'https://cloudflare-eth.com', latencyMs: 211 },
+      { label: 'Ankr', url: 'https://rpc.ankr.com/eth', latencyMs: 189 },
+      { label: 'PublicNode', url: 'https://ethereum.publicnode.com', latencyMs: 156 },
+    ]
+  },
+  {
+    id: 'ARB', label: 'Arbitrum One', shortLabel: 'ARB', chainId: 42161,
+    icon: SiEthereum, color: '#12AAFF',
+    rpcs: [
+      { label: 'Arbitrum Official', url: 'https://arb1.arbitrum.io/rpc', latencyMs: 175 },
+      { label: 'Ankr', url: 'https://rpc.ankr.com/arbitrum', latencyMs: 148 },
+    ]
+  },
+  {
+    id: 'BASE', label: 'Base Mainnet', shortLabel: 'BASE', chainId: 8453,
+    icon: SiEthereum, color: '#0052FF',
+    rpcs: [
+      { label: 'Base Official', url: 'https://mainnet.base.org', latencyMs: 193 },
+      { label: 'Ankr', url: 'https://rpc.ankr.com/base', latencyMs: 164 },
+    ]
+  },
+  {
+    id: 'OP', label: 'Optimism', shortLabel: 'OP', chainId: 10,
+    icon: SiEthereum, color: '#FF0420',
+    rpcs: [
+      { label: 'Optimism Official', url: 'https://mainnet.optimism.io', latencyMs: 203 },
+      { label: 'Ankr', url: 'https://rpc.ankr.com/optimism', latencyMs: 177 },
+    ]
+  },
+  {
+    id: 'AVAX', label: 'Avalanche C-Chain', shortLabel: 'AVAX', chainId: 43114,
+    icon: SiEthereum, color: '#E84142',
+    rpcs: [
+      { label: 'Avalanche Official', url: 'https://api.avax.network/ext/bc/C/rpc', latencyMs: 267 },
+      { label: 'Ankr', url: 'https://rpc.ankr.com/avalanche', latencyMs: 241 },
+    ]
+  },
+];
+
+const MOCK_TOKENS = [
+  { symbol: 'USDT', name: 'Tether USD', address: '0x55d398326f99059fF775485246999027B3197955', color: '#26A17B', badge: '₮' },
+  { symbol: 'USDC', name: 'USD Coin', address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', color: '#2775CA', badge: '$' },
+  { symbol: 'BUSD', name: 'Binance USD', address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', color: '#F0B90B', badge: 'B' },
+  { symbol: 'CAKE', name: 'PancakeSwap', address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82', color: '#1FC7D4', badge: '🥞' },
+  { symbol: 'WBNB', name: 'Wrapped BNB', address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', color: '#F3BA2F', badge: 'W' },
+  { symbol: 'BTCB', name: 'Bitcoin BEP20', address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', color: '#F7931A', badge: '₿' },
+];
+
 export function ConfigPanel() {
   const { config, updateConfig, startBot, stopBot, isRunning, stats, runsCompleted } = useBotStore();
+
+  // Token search state
+  const [tokenSearch, setTokenSearch] = React.useState(MOCK_TOKENS[0].address);
+  const [tokenResults, setTokenResults] = React.useState<typeof MOCK_TOKENS>([]);
+  const [selectedToken, setSelectedToken] = React.useState(MOCK_TOKENS[0]);
+  const [tokenDropdownOpen, setTokenDropdownOpen] = React.useState(false);
+  const tokenRef = React.useRef<HTMLDivElement>(null);
+
+  // Chain selector state
+  const [chainDropdownOpen, setChainDropdownOpen] = React.useState(false);
+  const selectedChain = CHAINS.find(c => c.id === config.chain) ?? CHAINS[0];
+  const chainRef = React.useRef<HTMLDivElement>(null);
+
+  // RPC selector state
+  const [rpcModalOpen, setRpcModalOpen] = React.useState(false);
+  const currentRpc = selectedChain.rpcs.find(r => r.url === config.rpc) ?? selectedChain.rpcs[0];
+
+  // Handle click outside to close dropdowns
+  React.useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (tokenRef.current && !tokenRef.current.contains(e.target as Node)) {
+        setTokenDropdownOpen(false);
+      }
+      if (chainRef.current && !chainRef.current.contains(e.target as Node)) {
+        setChainDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleTokenSearch = (value: string) => {
+    setTokenSearch(value);
+    if (value.length >= 2) {
+      const q = value.toLowerCase();
+      const results = MOCK_TOKENS.filter(t => 
+        t.symbol.toLowerCase().includes(q) || 
+        t.name.toLowerCase().includes(q) || 
+        t.address.toLowerCase().includes(q)
+      );
+      setTokenResults(results);
+      setTokenDropdownOpen(results.length > 0);
+    } else {
+      setTokenResults([]);
+      setTokenDropdownOpen(false);
+    }
+  };
+
+  const selectToken = (token: typeof MOCK_TOKENS[0]) => {
+    setSelectedToken(token);
+    setTokenSearch(token.address);
+    setTokenDropdownOpen(false);
+  };
+
+  const selectChain = (chain: ChainOption) => {
+    updateConfig({ chain: chain.id, rpc: chain.rpcs[0].url });
+    setChainDropdownOpen(false);
+  };
+
+  const selectRpc = (rpc: ChainOption['rpcs'][0]) => {
+    updateConfig({ rpc: rpc.url });
+    setRpcModalOpen(false);
+  };
+
+  const ChainIcon = selectedChain.icon;
 
   return (
     <div className="flex flex-col h-full bg-card rounded-2xl border border-border shadow-lg overflow-y-auto scrollbar-custom p-6 space-y-8 relative">
@@ -69,44 +208,114 @@ export function ConfigPanel() {
         </div>
 
         <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
-          <div className="flex gap-2">
-            <div className="w-12 h-12 bg-[#F3BA2F]/10 text-[#F3BA2F] rounded-xl flex items-center justify-center shrink-0 border border-[#F3BA2F]/20">
-              <SiBinance size={24} />
+          {/* Token search with dropdown */}
+          <div ref={tokenRef} className="relative">
+            <div className="flex gap-2">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border" style={{ backgroundColor: `${selectedToken.color}15`, borderColor: `${selectedToken.color}30`, color: selectedToken.color }}>
+                <span className="text-lg font-bold">{selectedToken.badge}</span>
+              </div>
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input 
+                  type="text" 
+                  className="w-full h-12 bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 text-sm text-white focus:outline-none focus:border-primary transition-all"
+                  placeholder="Search by token or paste address..."
+                  value={tokenSearch}
+                  onChange={e => handleTokenSearch(e.target.value)}
+                  onFocus={() => { if (tokenResults.length > 0) setTokenDropdownOpen(true); }}
+                />
+              </div>
             </div>
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input 
-                type="text" 
-                className="w-full h-12 bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 text-sm text-white focus:outline-none focus:border-primary transition-all"
-                placeholder="Search by token or paste address..."
-                defaultValue="0x55d398326f99059fF775485246999027B3197955"
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">Selected:</span>
-            <div className="flex items-center gap-2 bg-[#26A17B]/10 border border-[#26A17B]/20 text-[#26A17B] px-3 py-1 rounded-lg text-xs font-mono font-medium">
-              <div className="w-4 h-4 rounded-full bg-[#26A17B] flex items-center justify-center text-black text-[10px]">₮</div>
-              USDT 0x55d...7955
+
+            {/* Token search dropdown */}
+            {tokenDropdownOpen && tokenResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
+                {tokenResults.map(token => (
+                  <button
+                    key={token.address}
+                    onClick={() => selectToken(token)}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style={{ backgroundColor: `${token.color}20`, color: token.color }}>
+                      {token.badge}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-white">{token.symbol}</div>
+                      <div className="text-xs text-muted-foreground truncate">{token.address}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 mt-3">
+              <span className="text-xs text-muted-foreground">Selected:</span>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-mono font-medium border" style={{ backgroundColor: `${selectedToken.color}10`, borderColor: `${selectedToken.color}20`, color: selectedToken.color }}>
+                <div className="w-4 h-4 rounded-full flex items-center justify-center text-black text-[10px] font-bold" style={{ backgroundColor: selectedToken.color }}>
+                  {selectedToken.badge}
+                </div>
+                {selectedToken.symbol} {selectedToken.address.slice(0, 5)}...{selectedToken.address.slice(-4)}
+              </div>
             </div>
           </div>
         </div>
 
+        {/* Chain & RPC selectors */}
         <div className="grid grid-cols-2 gap-4">
+          {/* Chain dropdown */}
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Chain (Id: 56)</label>
-            <div className="h-10 bg-black/20 border border-white/10 rounded-xl px-3 flex items-center gap-2 text-sm text-white cursor-not-allowed opacity-80">
-              <SiBinance className="text-[#F3BA2F]" /> BSC Mainnet
+            <label className="text-xs text-muted-foreground">Chain (Id: {selectedChain.chainId})</label>
+            <div ref={chainRef} className="relative">
+              <button
+                onClick={() => setChainDropdownOpen(v => !v)}
+                className="w-full h-10 bg-black/20 border border-white/10 rounded-xl px-3 flex items-center gap-2 text-sm text-white hover:border-white/30 transition-colors"
+              >
+                <ChainIcon className="shrink-0" style={{ color: selectedChain.color }} />
+                <span className="flex-1 text-left truncate">{selectedChain.shortLabel} Mainnet</span>
+                <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", chainDropdownOpen && "rotate-180")} />
+              </button>
+              {chainDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
+                  {CHAINS.map(chain => {
+                    const Icon = chain.icon;
+                    return (
+                      <button
+                        key={chain.id}
+                        onClick={() => selectChain(chain)}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left",
+                          config.chain === chain.id && "bg-primary/10"
+                        )}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" style={{ color: chain.color }} />
+                        <span className="text-sm text-white">{chain.label}</span>
+                        {config.chain === chain.id && <span className="ml-auto text-primary text-xs">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
+
+          {/* RPC selector */}
           <div className="space-y-2">
             <label className="text-xs text-muted-foreground flex justify-between">
-              RPC <span className="text-emerald-400 font-mono">547 MS</span>
+              RPC
+              <span className="font-mono" style={{ color: currentRpc.latencyMs < 300 ? '#4ade80' : currentRpc.latencyMs < 500 ? '#facc15' : '#f87171' }}>
+                {currentRpc.latencyMs} MS
+              </span>
             </label>
-            <div className="h-10 bg-black/20 border border-white/10 rounded-xl px-3 flex items-center justify-between text-sm text-white">
-              <span className="truncate pr-2 font-mono text-xs">{config.rpc}</span>
-              <Settings className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-white shrink-0" />
-            </div>
+            <button
+              onClick={() => setRpcModalOpen(true)}
+              className="w-full h-10 bg-black/20 border border-white/10 rounded-xl px-3 flex items-center justify-between text-sm text-white hover:border-white/30 transition-colors"
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Wifi className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span className="truncate font-mono text-xs">{config.rpc.replace('https://', '')}</span>
+              </div>
+              <Settings className="w-4 h-4 text-muted-foreground shrink-0 ml-1" />
+            </button>
           </div>
         </div>
       </div>
@@ -291,6 +500,54 @@ export function ConfigPanel() {
         <Play className="w-5 h-5 mr-2 fill-black" /> RUN BOT
       </Button>
 
+      {/* RPC Selection Modal */}
+      <AppDialog open={rpcModalOpen} onOpenChange={setRpcModalOpen} title="Select RPC Endpoint">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground mb-4">Choose an RPC endpoint for <span className="text-white font-medium">{selectedChain.label}</span>. Lower latency is better.</p>
+          {selectedChain.rpcs.map((rpc, i) => (
+            <button
+              key={i}
+              onClick={() => selectRpc(rpc)}
+              className={cn(
+                "w-full flex items-center gap-4 px-4 py-3 rounded-xl border transition-all text-left",
+                config.rpc === rpc.url
+                  ? "border-primary bg-primary/10"
+                  : "border-white/5 bg-black/20 hover:bg-white/5 hover:border-white/10"
+              )}
+            >
+              <Wifi className={cn("w-5 h-5 shrink-0", rpc.latencyMs < 300 ? "text-emerald-400" : rpc.latencyMs < 500 ? "text-yellow-400" : "text-rose-400")} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-white font-medium">{rpc.label}</div>
+                <div className="text-xs text-muted-foreground font-mono truncate">{rpc.url}</div>
+              </div>
+              <div className={cn("text-xs font-mono shrink-0 px-2 py-1 rounded", rpc.latencyMs < 300 ? "text-emerald-400 bg-emerald-400/10" : rpc.latencyMs < 500 ? "text-yellow-400 bg-yellow-400/10" : "text-rose-400 bg-rose-400/10")}>
+                {rpc.latencyMs}ms
+              </div>
+              {config.rpc === rpc.url && <span className="text-primary text-sm">✓</span>}
+            </button>
+          ))}
+          <div className="pt-2">
+            <p className="text-xs text-muted-foreground mb-2">Custom RPC URL:</p>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                placeholder="https://your-rpc-endpoint.com"
+                className="flex-1 h-10 bg-black/40 border border-white/10 rounded-xl px-3 text-sm text-white font-mono focus:outline-none focus:border-primary transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const val = (e.target as HTMLInputElement).value.trim();
+                    if (val.startsWith('https://')) {
+                      updateConfig({ rpc: val });
+                      setRpcModalOpen(false);
+                    }
+                  }
+                }}
+              />
+              <Button size="sm" variant="outline">Add</Button>
+            </div>
+          </div>
+        </div>
+      </AppDialog>
     </div>
   );
 }
