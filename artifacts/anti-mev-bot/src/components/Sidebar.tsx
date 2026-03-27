@@ -2,7 +2,8 @@ import * as React from "react";
 import { Link, useLocation } from "wouter";
 import { 
   LayoutDashboard, Droplet, ArrowRightLeft, ShieldAlert, 
-  Banknote, Settings, Box, Bot, ChevronDown, Rocket, Search
+  Banknote, Settings, Box, Bot, ChevronDown, Rocket, Search,
+  Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SiSolana } from "react-icons/si";
@@ -48,6 +49,7 @@ const navItems: NavItem[] = [
       { label: "Avalanche C", href: "#" },
     ]
   },
+  { icon: Zap, label: "Token Launch Pipeline", href: "/launch-pipeline" },
   { icon: Box, label: "Bundled Sell/Buy Token", href: "#" },
   { icon: ShieldAlert, label: "Audit Contract", href: "#" },
   { icon: Rocket, label: "NFT", href: "#" },

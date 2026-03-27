@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import BotPage from "@/pages/BotPage";
+import LaunchPipelinePage from "@/pages/LaunchPipelinePage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -12,6 +13,7 @@ function Router() {
     <Switch>
       <Route path="/" component={BotPage} />
       <Route path="/dashboard" component={BotPage} />
+      <Route path="/launch-pipeline" component={LaunchPipelinePage} />
       {/* Fallback all other routes to BotPage for the prototype experience */}
       <Route component={BotPage} />
     </Switch>

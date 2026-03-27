@@ -50,17 +50,29 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 ## Packages
 
+### `artifacts/anti-mev-bot` (`@workspace/anti-mev-bot`)
+
+React + Vite + Tailwind frontend. Two pages:
+- `/` / `/dashboard` — BSC Anti-MEV Volume Bot simulator (wallets, config, log)
+- `/launch-pipeline` — DeFi Token Launch Pipeline dashboard (trends, candidates, launch jobs)
+
+Vite dev server proxies `/api` to `http://localhost:8080` (the api-server).
+
 ### `artifacts/api-server` (`@workspace/api-server`)
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+Express 5 API server with a full DeFi token launch automation pipeline.
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
+- Entry: `src/index.ts` — reads `PORT`, starts Express, initialises Telegram bot + cron scheduler
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
+- Routes: `src/routes/admin.ts` — 8+ admin endpoints (wallets, candidates, launch-jobs, trends, audit-logs, run-trends, run-candidates, run-launch)
+- Services: `xTrends.ts` (X/Twitter scraper with mock fallback), `aiGenerator.ts` (gpt-5-mini via Replit AI Integrations, `max_completion_tokens: 8192`, `response_format: json_object`), `telegramBot.ts` (Telegraf approval bot)
+- Adapters: `fourAdapter.ts` (BSC four.meme), `pumpAdapter.ts` (SOL pump.fun)
+- Jobs: `scheduler.ts` (node-cron: trends 10min, candidates 15min, Telegram notify 5min), `buildCandidates.ts`, `collectTrends.ts`
+- Depends on: `@workspace/db`, `@workspace/api-zod`, `@workspace/integrations-openai-ai-server`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+- `pnpm --filter @workspace/api-server run build` — production esbuild bundle
+- **Important**: gpt-5-mini is a reasoning model — always use `max_completion_tokens: 8192` (reasoning tokens consumed before output; 512 causes `finish_reason=length`)
+- **Env vars needed**: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`, `BSC_OPS_BUY_ADDRESS`, `BSC_OPS_BUY_PRIVKEY`, `SOL_OPS_BUY_ADDRESS`, `TWITTER_BEARER_TOKEN` (all optional; services degrade gracefully)
 
 ### `lib/db` (`@workspace/db`)
 

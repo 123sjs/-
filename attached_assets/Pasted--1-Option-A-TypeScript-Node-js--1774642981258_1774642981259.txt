@@ -1,0 +1,211 @@
+确认如下，不要再问我二选一，直接按这个执行：
+
+## 结论
+
+### 1）后端技术栈
+选择 **Option A：继续使用当前 TypeScript / Node.js 单体栈**。  
+**不要新增 Python 服务，不要引入 FastAPI/Flask。**
+
+原因：
+- 当前项目已经是 TypeScript pnpm monorepo
+- 前端是 React + Vite，后端是 Express + Drizzle
+- 为了最小改动、最快上线、最低风险，必须沿用现有栈
+- 不允许因为要加新功能而再开一套 Python 服务
+
+所以你接下来所有新功能都要落在当前 monorepo 里，基于：
+
+- `artifacts/api-server`
+- `lib/db`
+- 现有 React 前端
+
+进行增量开发。
+
+---
+
+### 2）AI 提供商
+选择 **OpenAI**。
+
+要求：
+- 文本生成使用：`gpt-4o-mini`
+- 图片生成先做可运行占位方案
+- 如果当前项目已经有 OpenAI SDK，直接复用
+- 所有模型输出必须严格 JSON
+- 只允许 `JSON.parse`
+- 不允许 `eval`
+
+---
+
+## 现在的执行原则
+
+不要停在审计阶段。  
+审计结论已经足够，直接进入开发。
+
+### 必须遵守
+- 保持现有 TypeScript monorepo，不引入 Python
+- 先做后端真实能力，再决定是否补前端页面
+- 所有改动必须最小化
+- 不破坏当前 `artifacts/anti-mev-bot` 现有 UI
+- 优先扩展 `artifacts/api-server`
+- 优先扩展 `lib/db`
+- 先把 BSC 线打通，再做 SOL
+- Telegram 审批必须接入
+- 所有关键动作写入 `audit_logs`
+
+### 明确不要做
+- 不新建独立 Python 服务
+- 不推倒重构 monorepo
+- 不重写前端
+- 不先做漂亮 UI 再补后端
+- 不实现多钱包捆绑买入
+- 不实现 bundled tx 同区块成交
+- 不实现刷量、假活跃、假持仓逻辑
+
+---
+
+## 开发顺序调整为
+
+### Phase 1：数据库与 API 骨架
+先完成：
+1. 在 `lib/db` 增加表：
+   - `trend_topics`
+   - `candidates`
+   - `launch_jobs`
+   - `audit_logs`
+   - `wallets`
+2. 在 `artifacts/api-server` 增加路由：
+   - `GET /health`
+   - `POST /admin/run-trends`
+   - `POST /admin/run-candidates`
+   - `POST /admin/run-launch/:jobId`
+   - `GET /admin/candidates`
+   - `GET /admin/launch-jobs`
+3. 先把 Drizzle schema 和 push 跑通
+4. 所有接口先返回真实结构化 JSON，即使部分逻辑还是 stub
+
+完成后立刻自测。
+
+---
+
+### Phase 2：热点采集
+新增 TypeScript 模块：
+- `services/xTrends.ts`
+- `jobs/collectTrends.ts`
+
+要求：
+- 优先走官方 API 结构
+- 如果 token 不完整，保留 mock fallback
+- 把结果写入 `trend_topics`
+
+完成后立刻自测。
+
+---
+
+### Phase 3：AI 候选生成
+新增：
+- `services/aiGenerator.ts`
+- `services/imageGenerator.ts`
+- `jobs/buildCandidates.ts`
+
+要求：
+- 从 `trend_topics` 生成 `candidates`
+- `gpt-4o-mini` 输出严格 JSON
+- 图片先允许 placeholder
+- 候选状态写成 `pending_review`
+
+完成后立刻自测。
+
+---
+
+### Phase 4：Telegram 审批
+新增：
+- `services/telegramBot.ts`
+- webhook / callback 处理
+
+按钮必须支持：
+- 部署 BSC
+- 部署 SOL
+- 双链部署
+- 跳过
+- BSC 买入模板
+- SOL 买入模板
+
+完成后立刻自测。
+
+---
+
+### Phase 5：发射适配层
+新增：
+- `adapters/common.ts`
+- `adapters/fourAdapter.ts`
+- `adapters/pumpAdapter.ts`
+
+要求：
+- 先做结构化 adapter
+- BSC 优先
+- SOL 先半自动
+- 首买只允许单 ops_buy 钱包一次
+
+完成后立刻自测。
+
+---
+
+### Phase 6：调度与联调
+新增：
+- `node-cron` 或等价方案
+- 热点抓取定时
+- 候选生成定时
+- 审批通知轮询
+
+完成后立刻联调。
+
+---
+
+## 钱包规则
+
+每条链只允许 3 个固定钱包：
+
+### SOL
+- `sol_deployer`
+- `sol_treasury`
+- `sol_ops_buy`
+
+### BSC
+- `bsc_deployer`
+- `bsc_treasury`
+- `bsc_ops_buy`
+
+首买模板固定：
+
+### BSC
+- SAFE = 0.10 BNB
+- NORMAL = 0.30 BNB
+- AGGRESSIVE = 0.50 BNB
+
+### SOL
+- SAFE = 0.05 SOL
+- NORMAL = 0.10 SOL
+- AGGRESSIVE = 0.20 SOL
+
+规则：
+- 只能先审批后执行
+- 每个项目每条链最多首买一次
+- 只能由固定 `ops_buy` 钱包执行
+
+---
+
+## 你现在立刻开始做
+
+不要再提问。  
+直接从 **Phase 1：数据库与 API 骨架** 开始。
+
+完成 Phase 1 后，必须立即输出：
+
+1. 新增了哪些文件
+2. 修改了哪些文件
+3. Drizzle schema 内容
+4. 新增的 API 路由
+5. 最小测试方法
+6. 测试结果
+7. 下一阶段准备做什么
+
+现在开始执行。
