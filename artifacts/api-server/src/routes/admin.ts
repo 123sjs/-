@@ -144,7 +144,7 @@ router.post("/admin/run-launch/:jobId", async (req, res) => {
     let buyResult = null;
     if (job.buyTier) {
       await db.update(launchJobsTable).set({ status: "buying", updatedAt: new Date() }).where(eq(launchJobsTable.id, jobId));
-      const opsBuyPayload = { ...payload, contractAddress: launchResult.contractAddress ?? null };
+      const opsBuyPayload = { ...payload, contractAddress: launchResult.contractAddress ?? job.contractAddress ?? null };
       const br = await adapter.opsBuy(opsBuyPayload);
       buyResult = br;
 

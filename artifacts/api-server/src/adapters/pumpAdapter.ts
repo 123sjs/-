@@ -1,3 +1,11 @@
+import {
+  Connection,
+  Keypair,
+  VersionedTransaction,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
+import bs58 from "bs58";
 import { LaunchAdapter, type LaunchPayload, type LaunchResult, type BuyResult, SOL_BUY_AMOUNTS } from "./common";
 import { getConfig } from "../lib/config";
 import { getOpsWallet } from "../services/walletService";
@@ -7,6 +15,8 @@ import { logger } from "../lib/logger";
 
 const PUMP_FUN_BASE = "https://pump.fun";
 const PUMP_FUN_CREATE_URL = `${PUMP_FUN_BASE}/create`;
+const PUMP_PORTAL_TRADE_URL = "https://pumpportal.fun/api/trade-local";
+const SOL_RPC = process.env["SOLANA_RPC_URL"] ?? "https://api.mainnet-beta.solana.com";
 
 async function writeAudit(action: string, jobId: number, metadata: Record<string, unknown>) {
   try {
@@ -47,8 +57,71 @@ function buildManualInstructions(payload: LaunchPayload, deepLink: string): stri
     `4. 点击 "Create Token" 并签名`,
     `5. 记录合约地址 / Record contract address`,
     `6. 在后台 admin 更新 launch_job.contractAddress`,
-    `7. 运营钱包 ops_buy 执行首买 (配置后自动执行)`,
+    `7. 运营钱包 ops_buy 将自动执行首买`,
   ].join("\n");
+}
+
+function loadKeypair(privKey: string): Keypair {
+  let raw: Uint8Array;
+  const trimmed = privKey.trim();
+
+  if (trimmed.startsWith("[")) {
+    const arr = JSON.parse(trimmed) as number[];
+    raw = Uint8Array.from(arr);
+  } else {
+    raw = bs58.decode(trimmed);
+  }
+
+  if (raw.length === 64) {
+    return Keypair.fromSecretKey(raw);
+  }
+  if (raw.length === 32) {
+    return Keypair.fromSeed(raw);
+  }
+  throw new Error(`Unexpected key length: ${raw.length}`);
+}
+
+async function executePumpBuy(
+  keypair: Keypair,
+  mint: string,
+  amountSol: number,
+): Promise<{ txHash: string; amountSpent: string }> {
+  const tradeResp = await fetch(PUMP_PORTAL_TRADE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      publicKey: keypair.publicKey.toBase58(),
+      action: "buy",
+      mint,
+      denominatedInSol: "true",
+      amount: amountSol,
+      slippage: 15,
+      priorityFee: 0.0005,
+      pool: "pump",
+    }),
+  });
+
+  if (!tradeResp.ok) {
+    const body = await tradeResp.text().catch(() => "");
+    throw new Error(`PumpPortal trade-local error ${tradeResp.status}: ${body.slice(0, 200)}`);
+  }
+
+  const rawTx = await tradeResp.arrayBuffer();
+  const tx = VersionedTransaction.deserialize(new Uint8Array(rawTx));
+  tx.sign([keypair]);
+
+  const connection = new Connection(SOL_RPC, "confirmed");
+  const sig = await connection.sendTransaction(tx, {
+    skipPreflight: false,
+    maxRetries: 3,
+  });
+
+  await connection.confirmTransaction(sig, "confirmed");
+
+  return {
+    txHash: sig,
+    amountSpent: `${amountSol} SOL`,
+  };
 }
 
 export class PumpAdapter extends LaunchAdapter {
@@ -126,7 +199,7 @@ export class PumpAdapter extends LaunchAdapter {
 
     const opsWallet = await getOpsWallet("sol");
     const tier = payload.buyTier ?? "safe";
-    const amountSol = SOL_BUY_AMOUNTS[tier] ?? SOL_BUY_AMOUNTS["safe"]!;
+    const amountSol = parseFloat(SOL_BUY_AMOUNTS[tier] ?? SOL_BUY_AMOUNTS["safe"]!);
 
     if (!opsWallet) {
       logger.warn({ jobId: payload.jobId }, "SOL ops wallet not configured");
@@ -143,34 +216,122 @@ export class PumpAdapter extends LaunchAdapter {
       };
     }
 
+    const mint = payload.contractAddress;
+    if (!mint) {
+      await writeAudit("ops_buy_awaiting_mint", payload.jobId, {
+        wallet: opsWallet.address,
+        tier,
+        amount: `${amountSol} SOL`,
+        note: "contractAddress not yet set — waiting for manual launch step",
+      });
+      return {
+        ok: false,
+        isStub: false,
+        errorMessage: "Token mint address not set yet. Complete manual pump.fun launch, then call PATCH /admin/launch-jobs/:id/contract to set contractAddress.",
+        walletLabel: "sol_ops_buy",
+      };
+    }
+
     if (!opsWallet.privKey) {
       await writeAudit("ops_buy_no_privkey", payload.jobId, {
         wallet: opsWallet.address,
         tier,
         amount: `${amountSol} SOL`,
-        note: "Private key not configured — P2 task: add @solana/web3.js signing",
+        note: "Private key not set for sol_ops_buy wallet",
       });
       return {
         ok: false,
-        isStub: true,
-        errorMessage: `SOL ops wallet found (${opsWallet.address}) but private key not configured. P2 task pending: @solana/web3.js signing.`,
+        isStub: false,
+        errorMessage: `SOL ops wallet ${opsWallet.address} found but private key not stored. Add encrypted_priv_key to wallets table.`,
         walletLabel: "sol_ops_buy",
       };
     }
 
-    logger.warn({ jobId: payload.jobId, wallet: opsWallet.address }, "SOL ops buy: @solana/web3.js not yet integrated (P2 task)");
-    await writeAudit("ops_buy_pending_p2", payload.jobId, {
-      wallet: opsWallet.address,
-      tier,
-      amount: `${amountSol} SOL`,
-      note: "@solana/web3.js signing integration pending (P2)",
-    });
-    return {
-      ok: false,
-      isStub: true,
-      errorMessage: `SOL signing not yet implemented (P2). Wallet: ${opsWallet.address}, Amount: ${amountSol} SOL`,
-      walletLabel: "sol_ops_buy",
-    };
+    try {
+      new PublicKey(mint);
+    } catch {
+      return {
+        ok: false,
+        isStub: false,
+        errorMessage: `Invalid Solana token mint address: ${mint}`,
+        walletLabel: "sol_ops_buy",
+      };
+    }
+
+    logger.info({ jobId: payload.jobId, mint, amountSol, tier }, "PumpAdapter.opsBuy: executing SOL buy");
+
+    let keypair: Keypair;
+    try {
+      keypair = loadKeypair(opsWallet.privKey);
+    } catch (err) {
+      return {
+        ok: false,
+        isStub: false,
+        errorMessage: `Failed to load SOL keypair: ${String(err)}`,
+        walletLabel: "sol_ops_buy",
+      };
+    }
+
+    const connection = new Connection(SOL_RPC, "confirmed");
+    const balanceLamports = await connection.getBalance(keypair.publicKey);
+    const balanceSol = balanceLamports / LAMPORTS_PER_SOL;
+    const needed = amountSol + 0.002;
+
+    if (balanceSol < needed) {
+      const msg = `Insufficient SOL balance. Have ${balanceSol.toFixed(4)} SOL, need ${needed.toFixed(4)} SOL (buy ${amountSol} + ~0.002 fees).`;
+      logger.warn({ jobId: payload.jobId, balanceSol, needed }, msg);
+      await writeAudit("ops_buy_insufficient_balance", payload.jobId, {
+        wallet: keypair.publicKey.toBase58(),
+        balanceSol,
+        needed,
+        mint,
+        tier,
+      });
+      return {
+        ok: false,
+        isStub: false,
+        errorMessage: msg,
+        walletLabel: "sol_ops_buy",
+      };
+    }
+
+    try {
+      const { txHash, amountSpent } = await executePumpBuy(keypair, mint, amountSol);
+
+      logger.info({ jobId: payload.jobId, txHash, mint, amountSpent }, "PumpAdapter.opsBuy: success");
+      await writeAudit("ops_buy_success", payload.jobId, {
+        wallet: keypair.publicKey.toBase58(),
+        mint,
+        txHash,
+        amountSpent,
+        tier,
+        rpc: SOL_RPC,
+      });
+
+      return {
+        ok: true,
+        txHash,
+        amountSpent,
+        isStub: false,
+        walletLabel: "sol_ops_buy",
+      };
+    } catch (err) {
+      const msg = String(err);
+      logger.error({ jobId: payload.jobId, err: msg, mint }, "PumpAdapter.opsBuy: transaction failed");
+      await writeAudit("ops_buy_failed", payload.jobId, {
+        wallet: keypair.publicKey.toBase58(),
+        mint,
+        error: msg,
+        tier,
+        amountSol,
+      });
+      return {
+        ok: false,
+        isStub: false,
+        errorMessage: `SOL buy transaction failed: ${msg}`,
+        walletLabel: "sol_ops_buy",
+      };
+    }
   }
 
   async getStatus(jobId: number): Promise<{ status: string; details: Record<string, unknown> }> {
