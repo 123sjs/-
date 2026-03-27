@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
 export function WalletPanel() {
-  const { wallets, toggleWalletSelection, setAllWalletSelection, deleteSelectedWallets, importWallets } = useBotStore();
+  const { wallets, toggleWalletSelection, setAllWalletSelection, deleteSelectedWallets, deleteWalletById, importWallets } = useBotStore();
   const [importOpen, setImportOpen] = React.useState(false);
   const [keysText, setKeysText] = React.useState("");
   const [revealedKeys, setRevealedKeys] = React.useState<Set<string>>(new Set());
@@ -166,7 +166,7 @@ export function WalletPanel() {
                         {revealedKeys.has(w.id) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                       <button
-                        onClick={() => deleteSelectedWallets()}
+                        onClick={() => deleteWalletById(w.id)}
                         className="p-1.5 rounded text-muted-foreground hover:text-rose-400 hover:bg-rose-400/10 transition-colors"
                         title="Delete wallet"
                       >

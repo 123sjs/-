@@ -50,6 +50,15 @@ const CHAINS: ChainOption[] = [
     ]
   },
   {
+    id: 'SOL', label: 'Solana Mainnet', shortLabel: 'SOL', chainId: 1399811149,
+    icon: SiSolana, color: '#9945FF',
+    rpcs: [
+      { label: 'Mainnet Beta', url: 'https://api.mainnet-beta.solana.com', latencyMs: 321 },
+      { label: 'Helius', url: 'https://rpc.helius.xyz/?api-key=demo', latencyMs: 178 },
+      { label: 'QuickNode', url: 'https://solana-mainnet.g.alchemy.com/v2/demo', latencyMs: 204 },
+    ]
+  },
+  {
     id: 'ETH', label: 'Ethereum Mainnet', shortLabel: 'ETH', chainId: 1,
     icon: SiEthereum, color: '#627EEA',
     rpcs: [
@@ -72,6 +81,22 @@ const CHAINS: ChainOption[] = [
     rpcs: [
       { label: 'Base Official', url: 'https://mainnet.base.org', latencyMs: 193 },
       { label: 'Ankr', url: 'https://rpc.ankr.com/base', latencyMs: 164 },
+    ]
+  },
+  {
+    id: 'SONIC', label: 'Sonic Mainnet', shortLabel: 'SONIC', chainId: 146,
+    icon: SiEthereum, color: '#00CFFF',
+    rpcs: [
+      { label: 'Sonic RPC', url: 'https://rpc.soniclabs.com', latencyMs: 189 },
+      { label: 'Ankr', url: 'https://rpc.ankr.com/sonic_mainnet', latencyMs: 214 },
+    ]
+  },
+  {
+    id: 'INK', label: 'Ink Mainnet', shortLabel: 'INK', chainId: 57073,
+    icon: SiEthereum, color: '#B3A8FF',
+    rpcs: [
+      { label: 'Ink RPC', url: 'https://rpc-gel.inkonchain.com', latencyMs: 201 },
+      { label: 'PublicNode', url: 'https://ink.publicnode.com', latencyMs: 225 },
     ]
   },
   {

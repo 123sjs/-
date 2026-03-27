@@ -61,6 +61,7 @@ interface BotState {
   toggleWalletSelection: (id: string) => void;
   setAllWalletSelection: (mode: 'all' | 'zero' | 'positive' | 'invert' | 'none') => void;
   deleteSelectedWallets: () => void;
+  deleteWalletById: (id: string) => void;
   updateConfig: (updates: Partial<BotConfig>) => void;
   startBot: () => void;
   stopBot: () => void;
@@ -145,6 +146,12 @@ export const useBotStore = create<BotState>((set, get) => ({
   deleteSelectedWallets: () => {
     set((state) => ({
       wallets: state.wallets.filter(w => !w.selected).map((w, i) => ({ ...w, index: i + 1 }))
+    }));
+  },
+
+  deleteWalletById: (id: string) => {
+    set((state) => ({
+      wallets: state.wallets.filter(w => w.id !== id).map((w, i) => ({ ...w, index: i + 1 }))
     }));
   },
 
