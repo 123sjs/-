@@ -13,47 +13,62 @@ export default function BotPage() {
 
   // The Bot Simulation Loop
   React.useEffect(() => {
-    let interval: number;
-    if (isRunning) {
-      const delayMs = config.delay * 1000;
-      
-      interval = window.setInterval(() => {
-        const state = useBotStore.getState();
-        const selectedWallets = state.wallets.filter(w => w.selected);
-        
-        if (selectedWallets.length === 0 || state.runsCompleted >= config.repeatTimes) {
-          stopBot();
-          return;
-        }
+    if (!isRunning) return;
 
-        // Pick a wallet
-        const wIdx = config.executionOrder === 'Random' 
-          ? Math.floor(Math.random() * selectedWallets.length)
-          : state.runsCompleted % selectedWallets.length;
-          
-        const wallet = selectedWallets[wIdx];
-        
-        // Mock a transaction
-        const isBuy = Math.random() > 0.5;
-        const amount = config.amountMode === 'Fixed'
-          ? config.amountBNB.toFixed(4)
-          : (Math.random() * config.amountBNB).toFixed(4);
-          
-        const hash = `0x${Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')}`;
+    let timeoutId: number;
 
-        addLog({
-          wallet: formatAddress(wallet.address),
-          action: isBuy ? 'Buy' : 'Sell',
-          amount: amount,
-          hash: formatAddress(hash),
-          status: Math.random() > 0.05 ? 'Success' : 'Failed'
-        });
+    const runTick = () => {
+      const state = useBotStore.getState();
+      const selectedWallets = state.wallets.filter(w => w.selected);
 
-      }, delayMs);
-    }
+      // Stop condition: no wallets selected; also stop if repeatRun is enabled and limit reached
+      const repeatLimitReached = state.config.repeatRun && state.runsCompleted >= state.config.repeatTimes;
+      if (selectedWallets.length === 0 || repeatLimitReached) {
+        stopBot();
+        return;
+      }
 
-    return () => clearInterval(interval);
-  }, [isRunning, config, addLog, stopBot]);
+      // Pick a wallet based on execution order
+      const wIdx = state.config.executionOrder === 'Random'
+        ? Math.floor(Math.random() * selectedWallets.length)
+        : state.runsCompleted % selectedWallets.length;
+      const wallet = selectedWallets[wIdx];
+
+      // Determine swap amount
+      const amount = state.config.amountMode === 'Fixed'
+        ? state.config.amountBNB.toFixed(4)
+        : state.config.amountMode === 'All'
+          ? wallet.bnb.toFixed(4)
+          : (Math.random() * state.config.amountBNB).toFixed(4);
+
+      const isBuy = Math.random() > 0.5;
+      const hash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+
+      addLog({
+        wallet: formatAddress(wallet.address),
+        action: isBuy ? 'Buy' : 'Sell',
+        amount,
+        hash: formatAddress(hash),
+        status: Math.random() > 0.05 ? 'Success' : 'Failed',
+      });
+
+      // Schedule next tick; apply random delay if enabled
+      const baseDelay = state.config.delay * 1000;
+      const nextDelay = state.config.randomDelay
+        ? Math.random() * baseDelay * 2 + 500
+        : baseDelay;
+
+      timeoutId = window.setTimeout(runTick, nextDelay);
+    };
+
+    // Start first tick after initial delay
+    const initialDelay = config.randomDelay
+      ? Math.random() * config.delay * 2000 + 500
+      : config.delay * 1000;
+    timeoutId = window.setTimeout(runTick, initialDelay);
+
+    return () => clearTimeout(timeoutId);
+  }, [isRunning, addLog, stopBot]);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden selection:bg-primary/30">
