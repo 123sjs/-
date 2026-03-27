@@ -1,0 +1,15 @@
+packages:
+  "framer-motion": "For smooth UI animations, layout transitions, and accordion effects"
+  "zustand": "For fast, local global state management of the bot simulator and wallet data"
+  "react-icons": "For accurate chain and DEX logos (SiEthereum, SiBinance, etc.)"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility to resolve Tailwind CSS class conflicts"
+
+images:
+  - path: "artifacts/anti-mev-bot/public/images/vip-bg.png"
+    description: "Dark, premium abstract gradient background in deep emerald green and black with subtle geometric glassmorphism layers, suitable for a VIP subscription banner in a DeFi crypto app"
+    aspect_ratio: "16:9"
+
+notes:
+  - This app is purely frontend-driven as requested. All bot runs and wallet balances are simulated via Zustand state.
+  - Using React-Icons for specific crypto branding and Lucide-React for general UI icons.
