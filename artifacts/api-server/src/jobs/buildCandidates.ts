@@ -7,12 +7,14 @@ import {
 import { desc } from "drizzle-orm";
 import { generateCandidate } from "../services/aiGenerator";
 import { generateTokenLogo } from "../services/imageGenerator";
+import { checkCandidateRisk } from "../services/riskEngine";
 import { logger } from "../lib/logger";
 
 export interface BuildCandidatesResult {
   ok: boolean;
   processed?: number;
   created?: number;
+  skipped?: number;
   errors?: Array<{ topic: string; error: string }>;
   error?: string;
 }
@@ -26,10 +28,11 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
       .limit(limitTopics);
 
     if (topics.length === 0) {
-      return { ok: true, processed: 0, created: 0, errors: [] };
+      return { ok: true, processed: 0, created: 0, skipped: 0, errors: [] };
     }
 
     let created = 0;
+    let skipped = 0;
     const errors: Array<{ topic: string; error: string }> = [];
 
     for (const topic of topics) {
@@ -37,6 +40,38 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
         logger.info({ topic: topic.topic }, "Generating candidate for topic");
 
         const payload = await generateCandidate(topic.topic);
+
+        const riskResult = checkCandidateRisk(
+          payload.tokenName,
+          payload.tokenSymbol,
+          payload.description,
+          payload.narrative,
+          topic.topic,
+        );
+
+        if (!riskResult.passed) {
+          skipped++;
+          logger.warn(
+            { topic: topic.topic, flags: riskResult.flags },
+            "Candidate blocked by risk engine",
+          );
+
+          await db.insert(auditLogsTable).values({
+            action: "candidate_risk_blocked",
+            entityType: "trend_topic",
+            entityId: topic.id,
+            actor: "risk_engine",
+            metadata: {
+              topic: topic.topic,
+              tokenName: payload.tokenName,
+              tokenSymbol: payload.tokenSymbol,
+              riskFlags: riskResult.flags,
+              riskScore: riskResult.score,
+            },
+          });
+
+          continue;
+        }
 
         const logoUrl = await generateTokenLogo(
           payload.tokenName,
@@ -70,6 +105,7 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
             topic: topic.topic,
             tokenName: payload.tokenName,
             tokenSymbol: payload.tokenSymbol,
+            riskFlags: riskResult.flags,
           },
         });
 
@@ -93,7 +129,7 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
       }
     }
 
-    return { ok: true, processed: topics.length, created, errors };
+    return { ok: true, processed: topics.length, created, skipped, errors };
   } catch (err) {
     const error = String(err);
     logger.error({ err: error }, "Build candidates job failed");

@@ -1,13 +1,19 @@
 import { LaunchAdapter, type LaunchPayload, type LaunchResult, type BuyResult, BSC_BUY_AMOUNTS } from "./common";
+import { getConfig } from "../lib/config";
+import { getOpsWallet } from "../services/walletService";
 import { logger } from "../lib/logger";
 
 const FOUR_MEME_API = process.env["FOUR_MEME_API_URL"] ?? "https://api.four.meme";
-const BSC_OPS_WALLET = process.env["BSC_OPS_BUY_ADDRESS"];
-const BSC_OPS_PRIVKEY = process.env["BSC_OPS_BUY_PRIVKEY"];
 
 export class FourAdapter extends LaunchAdapter {
   validate(payload: LaunchPayload): { ok: boolean; errors: string[] } {
+    const cfg = getConfig();
     const errors: string[] = [];
+
+    if (!cfg.enableBscLaunch) {
+      errors.push("BSC launch is disabled (ENABLE_BSC_LAUNCH=false)");
+      return { ok: false, errors };
+    }
 
     if (!payload.tokenName || payload.tokenName.length < 2 || payload.tokenName.length > 20) {
       errors.push("tokenName must be 2-20 chars");
@@ -23,6 +29,13 @@ export class FourAdapter extends LaunchAdapter {
   }
 
   async launch(payload: LaunchPayload): Promise<LaunchResult> {
+    const cfg = getConfig();
+
+    if (!cfg.enableBscLaunch) {
+      logger.warn({ candidateId: payload.candidateId }, "BSC launch skipped: ENABLE_BSC_LAUNCH=false");
+      return { ok: false, errorMessage: "BSC launch is disabled" };
+    }
+
     logger.info({ payload: { candidateId: payload.candidateId, tokenName: payload.tokenName } }, "FourAdapter.launch called");
 
     if (!process.env["FOUR_MEME_API_URL"]) {
@@ -67,15 +80,26 @@ export class FourAdapter extends LaunchAdapter {
   }
 
   async opsBuy(payload: LaunchPayload): Promise<BuyResult> {
-    if (!BSC_OPS_WALLET || !BSC_OPS_PRIVKEY) {
-      logger.warn("BSC_OPS_BUY_ADDRESS or BSC_OPS_BUY_PRIVKEY not set — ops buy skipped");
-      return { ok: false, errorMessage: "BSC ops buy wallet not configured" };
+    const cfg = getConfig();
+
+    if (!cfg.enableOpsBuy) {
+      logger.warn({ candidateId: payload.candidateId }, "Ops buy skipped: ENABLE_OPS_BUY=false");
+      return { ok: false, errorMessage: "Ops buy is disabled" };
+    }
+
+    const opsWallet = await getOpsWallet("bsc");
+    if (!opsWallet) {
+      logger.warn("BSC ops wallet not configured — ops buy skipped");
+      return { ok: false, errorMessage: "BSC ops wallet not configured" };
     }
 
     const tier = payload.buyTier ?? "safe";
     const amount = BSC_BUY_AMOUNTS[tier] ?? BSC_BUY_AMOUNTS["safe"]!;
 
-    logger.info({ candidateId: payload.candidateId, tier, amount }, "FourAdapter.opsBuy — stub");
+    logger.info(
+      { candidateId: payload.candidateId, tier, amount, wallet: opsWallet.address },
+      "FourAdapter.opsBuy — single ops wallet first-buy (stub)",
+    );
 
     return {
       ok: true,

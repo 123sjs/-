@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { getConfig } from "./lib/config";
 import { initTelegramBot } from "./services/telegramBot";
 import { startScheduler } from "./jobs/scheduler";
 
@@ -16,6 +17,8 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+getConfig();
 
 app.listen(port, (err) => {
   if (err) {

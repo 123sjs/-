@@ -1,11 +1,17 @@
 import { LaunchAdapter, type LaunchPayload, type LaunchResult, type BuyResult, SOL_BUY_AMOUNTS } from "./common";
+import { getConfig } from "../lib/config";
+import { getOpsWallet } from "../services/walletService";
 import { logger } from "../lib/logger";
-
-const SOL_OPS_WALLET = process.env["SOL_OPS_BUY_ADDRESS"];
 
 export class PumpAdapter extends LaunchAdapter {
   validate(payload: LaunchPayload): { ok: boolean; errors: string[] } {
+    const cfg = getConfig();
     const errors: string[] = [];
+
+    if (!cfg.enableSolLaunch) {
+      errors.push("SOL launch is disabled (ENABLE_SOL_LAUNCH=false)");
+      return { ok: false, errors };
+    }
 
     if (!payload.tokenName || payload.tokenName.length < 2 || payload.tokenName.length > 32) {
       errors.push("tokenName must be 2-32 chars");
@@ -21,6 +27,13 @@ export class PumpAdapter extends LaunchAdapter {
   }
 
   async launch(payload: LaunchPayload): Promise<LaunchResult> {
+    const cfg = getConfig();
+
+    if (!cfg.enableSolLaunch) {
+      logger.warn({ candidateId: payload.candidateId }, "SOL launch skipped: ENABLE_SOL_LAUNCH=false");
+      return { ok: false, errorMessage: "SOL launch is disabled" };
+    }
+
     logger.info({ payload: { candidateId: payload.candidateId, tokenName: payload.tokenName } }, "PumpAdapter.launch called (semi-auto)");
 
     logger.info(
@@ -41,15 +54,26 @@ export class PumpAdapter extends LaunchAdapter {
   }
 
   async opsBuy(payload: LaunchPayload): Promise<BuyResult> {
-    if (!SOL_OPS_WALLET) {
-      logger.warn("SOL_OPS_BUY_ADDRESS not set — ops buy skipped");
-      return { ok: false, errorMessage: "SOL ops buy wallet not configured" };
+    const cfg = getConfig();
+
+    if (!cfg.enableOpsBuy) {
+      logger.warn({ candidateId: payload.candidateId }, "Ops buy skipped: ENABLE_OPS_BUY=false");
+      return { ok: false, errorMessage: "Ops buy is disabled" };
+    }
+
+    const opsWallet = await getOpsWallet("sol");
+    if (!opsWallet) {
+      logger.warn("SOL ops wallet not configured — ops buy skipped");
+      return { ok: false, errorMessage: "SOL ops wallet not configured" };
     }
 
     const tier = payload.buyTier ?? "safe";
     const amount = SOL_BUY_AMOUNTS[tier] ?? SOL_BUY_AMOUNTS["safe"]!;
 
-    logger.info({ candidateId: payload.candidateId, tier, amount, wallet: SOL_OPS_WALLET }, "PumpAdapter.opsBuy — stub");
+    logger.info(
+      { candidateId: payload.candidateId, tier, amount, wallet: opsWallet.address },
+      "PumpAdapter.opsBuy — single ops wallet first-buy (stub)",
+    );
 
     return {
       ok: true,

@@ -1,0 +1,723 @@
+你现在不要重写项目，也不要从零新建。你要做的是：**基于当前 Replit 项目做增量开发**，保留现有可运行部分，在不破坏当前部署的前提下，把新的“热点采集 + AI 候选生成 + Telegram 审批 + 链上发射 + 审计日志”功能并入当前系统。
+
+## 一、工作方式
+
+你必须按下面方式工作：
+
+1. **先审查当前代码库**
+   - 扫描整个项目文件树
+   - 判断当前技术栈（Python / Node / Flask / FastAPI / Express / 前端框架）
+   - 找出当前入口文件
+   - 找出现有路由
+   - 找出现有数据库或本地存储方式
+   - 找出现有“自动交易 / mev / bot / volume / swap / wallet / telegram / scheduler”相关模块
+   - 输出一份简短评估：当前项目结构、可复用部分、需要新增部分
+
+2. **然后直接增量改造**
+   - 不要只写计划
+   - 不要停在分析
+   - 直接创建文件、改代码、安装依赖、补启动配置、自测
+
+3. **任何高风险旧逻辑都不要扩展**
+   - 如果当前项目里有自动交易/volume/mev 相关模块，你可以保留代码与页面，但不要新增或强化任何“多钱包协同买卖、刷量、同区块协调成交、假持仓分布”逻辑
+   - 这些旧逻辑如果存在，请放到 `ENABLE_LEGACY_TRADING=false` 或类似 feature flag 后面，默认关闭
+   - 你这次新增的功能只允许使用 **单公开运营钱包首买**
+
+4. **优先复用现有项目**
+   - 如果当前项目已经是 Python，就在现有 Python 架构上扩展
+   - 如果当前项目不是 Python，但已有前端页面，则尽量保留前端，只新增一个最小 Python 后端服务来承接新功能
+   - 不要无必要替换整个栈
+
+5. **每个阶段都要自测**
+   - 每完成一个模块，说明改了哪些文件
+   - 给出最小测试方法
+   - 能运行就直接运行
+   - 报错就继续修复，不要停在“理论完成”
+
+---
+
+## 二、本次要新增的目标功能
+
+请把以下功能并入当前项目：
+
+1. 每 10 分钟自动采集 X 热点
+2. 用 AI 自动生成：
+   - token_name
+   - token_symbol
+   - description
+   - narrative
+   - logo
+3. 把候选项目发送到 Telegram 机器人审批
+4. 审批通过后执行发射：
+   - BSC：Four.meme 自动发射适配层
+   - SOL：Pump 半自动发射适配层
+5. 发射成功后，可选执行一次 **单公开运营钱包首买**
+6. 把结果推送到 Telegram
+7. 全流程写入数据库和审计日志
+8. 提供最小管理接口和健康检查
+
+---
+
+## 三、严格限制
+
+### 必须遵守
+- 只允许 **单公开运营钱包首买**
+- 每条链只允许 3 个固定用途钱包：
+  - deployer
+  - treasury
+  - ops_buy
+- 所有关键动作必须写入 audit_logs
+- 所有 AI 输出必须是严格 JSON
+- 所有失败必须有明确错误信息
+- 保持最小可运行、最小复杂度、最小侵入改造
+
+### 明确不要做
+- 不实现多钱包捆绑买入
+- 不实现 bundled tx 风格同区块成交
+- 不实现刷量、假活跃、假持仓分布
+- 不动态批量生成钱包
+- 不使用 eval 解析 AI 输出
+- 不破坏当前现有部署页面
+
+---
+
+## 四、如果当前项目是 Python，请按以下结构扩展
+
+如果当前项目已经是 Python，请尽量按这个结构补齐；如果当前项目不是 Python，就按同等职责拆分到最贴近的目录中：
+
+project/
+├─ app.py
+├─ scheduler.py
+├─ config.py
+├─ requirements.txt
+├─ .replit
+├─ replit.nix
+├─ db/
+│  ├─ session.py
+│  ├─ models.py
+│  └─ init_db.py
+├─ services/
+│  ├─ x_trends.py
+│  ├─ ai_generator.py
+│  ├─ image_generator.py
+│  ├─ telegram_bot.py
+│  ├─ risk_engine.py
+│  ├─ wallet_service.py
+│  ├─ candidate_service.py
+│  └─ audit_service.py
+├─ adapters/
+│  ├─ common.py
+│  ├─ four_adapter.py
+│  └─ pump_adapter.py
+├─ tasks/
+│  ├─ collect_trends.py
+│  ├─ build_candidates.py
+│  ├─ notify_review.py
+│  ├─ execute_launch.py
+│  └─ post_launch_notify.py
+├─ routes/
+│  ├─ webhook.py
+│  ├─ admin_api.py
+│  └─ health.py
+├─ prompts/
+│  ├─ token_name.txt
+│  ├─ token_desc.txt
+│  └─ image_prompt.txt
+└─ assets/
+   ├─ logos/
+   └─ temp/
+
+---
+
+## 五、数据库要求
+
+如果项目里已经有数据库，请在现有数据库基础上加表；如果没有，就创建最小 SQLAlchemy/PostgreSQL 支持。
+
+### 1）trend_topics
+字段：
+- id
+- source
+- topic
+- region
+- first_seen_at
+- last_seen_at
+- post_count
+- engagement_score
+- velocity_score
+- raw_json
+
+### 2）candidates
+字段：
+- id
+- topic_id
+- token_name
+- token_symbol
+- description
+- logo_url
+- logo_prompt
+- narrative
+- score_total
+- risk_flags
+- status
+- created_at
+- updated_at
+
+status 允许：
+- draft
+- pending_review
+- approved
+- rejected
+- launched
+- failed
+
+### 3）launch_jobs
+字段：
+- id
+- candidate_id
+- chain
+- platform
+- launch_mode
+- status
+- deploy_tx_hash
+- buy_tx_hash
+- platform_url
+- ops_buy_template
+- ops_buy_amount
+- error_message
+- created_at
+- updated_at
+
+### 4）wallets
+字段：
+- id
+- chain
+- wallet_label
+- address
+- encrypted_private_key
+- enabled
+- created_at
+
+固定钱包标签：
+
+SOL:
+- sol_deployer
+- sol_treasury
+- sol_ops_buy
+
+BSC:
+- bsc_deployer
+- bsc_treasury
+- bsc_ops_buy
+
+### 5）audit_logs
+字段：
+- id
+- actor
+- action
+- object_type
+- object_id
+- payload_json
+- created_at
+
+---
+
+## 六、配置与 Secrets
+
+请优先复用当前项目已有环境变量；没有的再新增。统一做 config 封装与启动校验。
+
+新增/兼容以下环境变量：
+
+- X_BEARER_TOKEN
+- X_API_KEY
+- X_API_SECRET
+- X_ACCESS_TOKEN
+- X_ACCESS_SECRET
+
+- OPENAI_API_KEY
+
+- TELEGRAM_BOT_TOKEN
+- TELEGRAM_CHAT_ID
+- TELEGRAM_ADMIN_USER_ID
+- TELEGRAM_WEBHOOK_SECRET
+
+- DATABASE_URL
+
+- SOL_RPC_URL
+- SOL_DEPLOYER_PRIVATE_KEY
+- SOL_TREASURY_PRIVATE_KEY
+- SOL_OPS_BUY_PRIVATE_KEY
+
+- BSC_RPC_URL
+- BSC_DEPLOYER_PRIVATE_KEY
+- BSC_TREASURY_PRIVATE_KEY
+- BSC_OPS_BUY_PRIVATE_KEY
+
+- FOUR_BASE_URL
+- FOUR_API_KEY
+
+- APP_ENV
+- APP_BASE_URL
+- ENABLE_SOL_LAUNCH
+- ENABLE_BSC_LAUNCH
+- ENABLE_OPS_BUY
+- ENABLE_LEGACY_TRADING
+- TREND_INTERVAL_MINUTES
+
+默认值：
+- APP_ENV=development
+- ENABLE_SOL_LAUNCH=true
+- ENABLE_BSC_LAUNCH=true
+- ENABLE_OPS_BUY=true
+- ENABLE_LEGACY_TRADING=false
+- TREND_INTERVAL_MINUTES=10
+
+---
+
+## 七、模块开发要求
+
+### A. 先做“现状审查”
+在真正改代码前，请先：
+1. 输出当前文件树
+2. 标记当前入口文件
+3. 标记当前已有的交易相关模块
+4. 标记当前已有的 webhook / API / schedule 逻辑
+5. 判断当前项目更适合：
+   - 原地扩展
+   - 加一个新后端模块
+   - 轻量重构后扩展
+
+**但是不要停在这里，审查完立刻开始改代码。**
+
+---
+
+### B. config.py
+实现：
+- 环境变量读取
+- 类型转换
+- 缺失关键配置时报错
+- 提供 Config 类
+- 兼容当前项目已有配置方式
+
+---
+
+### C. db/session.py / db/models.py / db/init_db.py
+实现：
+- engine
+- SessionLocal
+- Base
+- get_db()
+- init_db()
+- 自动建表
+
+如果当前项目已经有 ORM，请复用现有 ORM，而不是重复造轮子。
+
+---
+
+### D. routes/health.py
+实现：
+- GET /health
+返回：
+- status
+- database
+- scheduler
+- version
+- legacy_trading_enabled
+
+---
+
+### E. services/x_trends.py
+实现：
+- fetch_trends()
+- fetch_recent_posts(topic)
+- normalize_topic_data(raw)
+
+要求：
+- 使用官方 API 结构
+- 如果本地缺 token，则保留 mock fallback 方便测试
+- 返回统一结构
+
+---
+
+### F. tasks/collect_trends.py
+实现：
+- 抓取热点
+- 去重
+- 写入 trend_topics
+- 写审计日志
+
+---
+
+### G. services/risk_engine.py
+实现基础风控：
+- 名人词
+- 品牌词
+- 政治词
+- 灾难词
+- 诈骗类词
+- 重复题材冷却
+
+提供：
+- check_candidate_risk()
+
+---
+
+### H. services/ai_generator.py
+实现：
+- build_candidate_from_topic(topic_text)
+
+要求：
+- 用 AI 生成 token_name、token_symbol、description、narrative
+- 输出必须是 JSON
+- 只能 json.loads，不准 eval
+- 做字段校验
+- 失败时返回明确异常
+- 所有失败写审计日志
+
+---
+
+### I. services/image_generator.py
+实现：
+- generate_logo(candidate)
+
+要求：
+- 先做可运行版本
+- 如果图像 API 不可用，则生成本地占位图
+- 输出 logo_url 或本地路径
+- 不因为图片失败而阻塞整个候选生成
+
+---
+
+### J. tasks/build_candidates.py
+实现：
+- 读取未处理热点
+- 风控初筛
+- AI 生成候选
+- 生成 logo
+- 写入 candidates
+- 状态设为 pending_review
+- 写审计日志
+
+---
+
+### K. services/telegram_bot.py
+实现：
+- send_candidate_review(candidate)
+- send_launch_result(job)
+- process_callback(update)
+
+审批卡片按钮：
+
+第一行：
+- 部署 BSC
+- 部署 SOL
+- 双链部署
+- 跳过
+
+第二行：
+- BSC 0.1
+- BSC 0.3
+- BSC 0.5
+
+第三行：
+- SOL 0.05
+- SOL 0.1
+- SOL 0.2
+
+第四行：
+- 改名
+- 改符号
+- 改描述
+- 拉黑
+
+callback_data 用短格式，例如：
+- approve_bsc:123
+- approve_sol:123
+- approve_both:123
+- reject:123
+- set_bsc_buy_03:123
+- set_sol_buy_01:123
+
+要求：
+- 尽量兼容当前项目已有 Telegram 逻辑
+- 如果当前项目已经有 bot webhook，不要破坏原有功能
+- 统一在 callback 中落库审批状态
+
+---
+
+### L. routes/webhook.py
+实现 Telegram webhook：
+- 校验 TELEGRAM_WEBHOOK_SECRET
+- 处理 callback query
+- 调用 telegram_bot.process_callback
+
+如果当前项目已经有 webhook 路由，请合并，不要重复冲突。
+
+---
+
+### M. routes/admin_api.py
+实现最小管理接口：
+- POST /admin/run-trends
+- POST /admin/run-candidates
+- POST /admin/run-launch/<job_id>
+- GET /admin/candidates
+- GET /admin/launch-jobs
+
+如果当前项目已有 admin 页面，请尽量复用。
+
+---
+
+### N. services/wallet_service.py
+实现：
+- 按标签读取固定钱包
+- 解密私钥（先做简单封装）
+- 禁止动态批量生成钱包
+- 私钥绝不能进入日志
+
+---
+
+### O. services/audit_service.py
+实现：
+- log_action(actor, action, object_type, object_id, payload)
+
+必须记录：
+- 热点抓取
+- 候选生成
+- 风控拦截
+- TG 审批
+- 发射动作
+- 首买动作
+- 失败动作
+
+---
+
+### P. adapters/common.py
+定义统一接口：
+
+class LaunchAdapter:
+    def validate(self, payload): ...
+    def launch(self, payload): ...
+    def ops_buy(self, payload): ...
+    def get_status(self, job_id): ...
+
+---
+
+### Q. adapters/four_adapter.py
+实现 BSC 发射适配层：
+
+输入：
+- token_name
+- token_symbol
+- description
+- logo_url
+- deployer wallet
+- ops_buy_template
+
+输出：
+- deploy_tx_hash
+- contract_or_token_address
+- platform_url
+- buy_tx_hash
+
+要求：
+- 优先把当前项目已有 BSC 自动化逻辑包成适配器
+- 如果当前项目已经有 Playwright 或交易模块，尽量只复用“页面流程/配置读取/日志能力”，不要复用任何多钱包或 volume 逻辑
+- 首买只允许单 ops_buy 钱包执行一次
+- 结果必须结构化返回
+
+---
+
+### R. adapters/pump_adapter.py
+实现 SOL 半自动适配层：
+
+要求：
+- 优先把当前项目已有 Solana 相关逻辑包装起来
+- 如果当前项目没有成熟集成，则实现：
+  - prepare_payload()
+  - confirm_and_launch()
+  - get_status()
+- 当前默认按“半自动”设计
+- 首买只允许单 ops_buy 钱包执行一次
+- 结果必须结构化返回
+
+---
+
+### S. tasks/execute_launch.py
+实现发射执行：
+
+流程：
+1. 读取审批结果或指定 job
+2. 构造 payload
+3. 调用对应 adapter
+4. 更新 launch_jobs
+5. 如果启用 ops_buy，则执行一次首买
+6. 写审计日志
+7. 异常时写 error_message
+
+---
+
+### T. tasks/post_launch_notify.py
+实现发射后 TG 通知：
+
+通知内容：
+- 链
+- 平台
+- 名称
+- Symbol
+- 首买金额
+- deploy tx
+- buy tx
+- 平台链接
+- 状态
+
+---
+
+### U. scheduler.py
+如果当前项目已有 scheduler，请扩展它；没有再新增。
+
+调度要求：
+- 每 10 分钟执行 collect_trends
+- 延迟 1 分钟执行 build_candidates
+- 每 2 分钟执行 notify_review
+
+---
+
+### V. app.py
+实现/整合启动入口：
+- 注册 blueprint
+- 初始化数据库
+- 初始化 scheduler
+- 挂载 health
+- 保持当前已有页面不被破坏
+- 启动应用
+
+---
+
+## 八、首买模板
+
+### BSC
+- SAFE = 0.10 BNB
+- NORMAL = 0.30 BNB
+- AGGRESSIVE = 0.50 BNB
+
+### SOL
+- SAFE = 0.05 SOL
+- NORMAL = 0.10 SOL
+- AGGRESSIVE = 0.20 SOL
+
+规则：
+- 必须先审批
+- 每个项目每条链最多首买一次
+- 只能由固定 ops_buy 钱包执行
+
+---
+
+## 九、开发顺序
+
+请严格按这个顺序做：
+
+1. 审查当前项目结构并输出评估
+2. requirements / package 依赖调整
+3. config
+4. 数据层
+5. health 路由
+6. app 最小启动
+7. X 热点采集
+8. 风控
+9. AI 候选生成
+10. 图片生成
+11. 候选任务
+12. Telegram 审批
+13. webhook
+14. admin API
+15. 钱包服务
+16. 审计服务
+17. adapter 接口
+18. four adapter
+19. pump adapter
+20. launch 执行
+21. post-launch 通知
+22. scheduler
+23. .replit / 启动方式
+24. 自测与修复
+
+---
+
+## 十、每完成一个阶段都必须做的事
+
+每个阶段都必须：
+1. 列出新增文件
+2. 列出修改文件
+3. 给出最小测试方法
+4. 实际运行测试
+5. 如果报错，继续修复
+6. 最后更新一个 `docs/UPGRADE_NOTES.md`
+
+---
+
+## 十一、如果当前项目是 Python，请安装这些依赖
+
+requirements.txt 至少包含：
+
+flask
+requests
+httpx
+sqlalchemy
+psycopg2-binary
+python-dotenv
+apscheduler
+openai
+python-telegram-bot
+playwright
+pillow
+gunicorn
+
+如果当前项目不是 Python，请只安装新增 Python 服务所需最小依赖。
+
+---
+
+## 十二、Replit 启动配置
+
+请确保生成或更新：
+
+### .replit
+- 如果当前项目原本就是 Python：
+  run = "python app.py"
+- 如果当前项目是别的入口，请保留原入口，同时提供一个清晰的 README 说明如何启动新增服务
+
+### replit.nix
+- 补齐 Python 与 Playwright 所需基础依赖
+
+---
+
+## 十三、最终交付标准
+
+完成后必须满足：
+
+- 当前项目原有页面还能打开
+- /health 返回正常 JSON
+- 可以手动触发：
+  - /admin/run-trends
+  - /admin/run-candidates
+- 热点可以入库
+- 候选项目可以入库
+- Telegram 审批卡片可以发送
+- launch_jobs 可以创建
+- BSC / SOL adapter 有清晰结构化实现
+- 所有关键动作写 audit_logs
+- legacy trading 默认关闭
+- 新增功能不破坏现有应用
+
+---
+
+## 十四、现在立刻开始
+
+不要只给计划。
+请按顺序直接：
+1. 扫描当前项目
+2. 输出审查结论
+3. 开始增量改造
+4. 安装依赖
+5. 写代码
+6. 运行测试
+7. 修复错误
+直到最小可运行版本完成。

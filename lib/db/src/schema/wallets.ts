@@ -7,6 +7,7 @@ export const walletsTable = pgTable("wallets", {
   chain: text("chain").notNull(),
   role: text("role").notNull(),
   address: text("address").notNull(),
+  encryptedPrivKey: text("encrypted_priv_key"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
