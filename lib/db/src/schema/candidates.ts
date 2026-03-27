@@ -12,6 +12,8 @@ export const candidatesTable = pgTable("candidates", {
   narrative: text("narrative"),
   logoUrl: text("logo_url"),
   riskLevel: text("risk_level").notNull().default("medium"),
+  scoreTotal: integer("score_total"),
+  riskFlags: jsonb("risk_flags"),
   suggestedChain: text("suggested_chain").notNull().default("bsc"),
   status: text("status").notNull().default("pending_review"),
   bscBuyTier: text("bsc_buy_tier"),

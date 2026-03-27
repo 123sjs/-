@@ -1,0 +1,375 @@
+基于当前仓库最新代码与最新审计结论，不要重写项目，不要推倒重来，只做**最小增量补完**。  
+目标是把现有“热点采集 → AI 候选 → 风控 → Telegram 审批 → launch_jobs → ops_buy → 审计”这条主链路，从“演示可跑”补到“接近可上线”。
+
+# 工作原则
+
+1. **严格增量修改**
+   - 保留现有目录结构
+   - 保留现有 UI 页面
+   - 保留现有 admin 路由
+   - 保留现有 audit_logs、health、scheduler、riskEngine、walletService
+   - 不要重命名一堆文件
+   - 不要无意义重构
+
+2. **禁止新增高风险旧逻辑**
+   - 不要实现多钱包捆绑买入
+   - 不要实现 bundled tx 风格同区块成交
+   - 不要实现刷量、假活跃、假持仓分布
+   - legacy trading 继续维持 `ENABLE_LEGACY_TRADING=false`
+
+3. **按优先级执行**
+   - 先做 P0
+   - P0 全部完成并自测通过后，再做 P1
+   - P1 完成后，再做 P2
+   - 每个阶段都要给出改动文件、测试方法、测试结果
+
+4. **不要只输出计划**
+   - 直接改代码
+   - 直接安装缺失依赖
+   - 直接补测试
+   - 直接运行验证
+   - 报错就继续修复
+
+---
+
+# 现状判断（以此为准）
+
+当前仓库已具备：
+- X 热点采集基础版
+- AI 生成候选
+- Telegram 审批卡片主体
+- audit_logs 表与审计链路
+- health 路由
+- admin 路由
+- 风控引擎
+- walletService（AES-256 加密、单钱包设计）
+- Four / Pump adapter 骨架
+- LaunchPipelinePage 前端仪表板
+
+当前主要缺口：
+- Four adapter 真实链上签名与真实首买
+- Pump adapter 半自动还偏 stub
+- Telegram rename/resymbol/redesc 未完成输入流
+- X 热点源仍需升级
+- candidates / launch_jobs 若干关键列未补齐
+
+---
+
+# P0（必须先做完）
+
+## P0-1：BSC fourAdapter 接入真实链上签名与真实首买
+目标：
+- 把 `adapters/fourAdapter.ts` 从 stub 补成真实可执行版本
+- 使用 `ethers.js`
+- 使用 BSC RPC
+- 使用 `bsc_deployer` 和 `bsc_ops_buy`
+- 首买只能由单 `ops_buy` 钱包执行一次
+- 返回真实结构化结果
+
+必须实现：
+1. `validate(payload)` 校验：
+   - token_name
+   - token_symbol
+   - description
+   - logo_url
+   - deployer wallet
+   - BSC RPC 配置
+2. `launch(payload)` 返回：
+   - `success`
+   - `deployTxHash`
+   - `contractAddress` 或平台返回的 token address
+   - `platform`
+   - `platformUrl`
+   - `raw`
+3. `opsBuy(payload)` 返回：
+   - `success`
+   - `buyTxHash`
+   - `amount`
+   - `walletLabel`
+4. gas 估算与错误捕获
+5. 所有失败写入 `audit_logs`
+6. 私钥绝不能出现在日志里
+
+要求：
+- 如果当前 Four 真 API 尚未完全可用，至少做到：
+  - 真实 BSC 钱包签名能力
+  - 真实链上原生转账 / 调用能力
+  - 清晰的适配层结构
+- 保留 stub fallback，但必须以 feature flag 控制，且默认优先真实逻辑
+
+验收标准：
+- 能在本地或测试环境跑通一次真实签名流程
+- `launch_jobs` 能写入真实 `deployTxHash`
+- `opsBuy` 能写入真实 `buyTxHash`
+- TG 通知里能展示真实哈希或明确 fallback 状态
+
+---
+
+## P0-2：Telegram 环境变量联调 + 完整审批链路实测
+目标：
+- 确保 Telegram 真能工作，不是代码存在但没联通
+- 验证完整审批闭环
+
+必须检查并补完：
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ADMIN_CHAT_ID`
+- `TELEGRAM_WEBHOOK_SECRET`
+- webhook 路由可用
+- callback query 可落库
+- approve/reject/blacklist/tier 全部真实生效
+
+必须自测：
+1. 发送一条候选审批卡片
+2. 点击：
+   - approve_bsc
+   - reject
+   - set_bsc_buy_03
+   - blacklist
+3. 验证数据库状态变化
+4. 验证 audit_logs 写入
+5. 验证 launch_job 创建
+
+验收标准：
+- 审批卡片真实发出
+- 按钮真实可点
+- 点完后状态真实变更
+- 不只是日志打印
+
+---
+
+## P0-3：Pump 半自动流程补成“可执行半自动”，不是纯 stub
+目标：
+- `adapters/pumpAdapter.ts` 维持半自动设计
+- 但不能只是返回假地址
+- 必须让管理员能够从 TG/后台拿到**明确下一步动作**
+
+必须实现：
+1. `preparePayload()` 或等价函数
+2. `launch()` 返回结构化结果：
+   - `success`
+   - `launchMode: "manual_final"`
+   - `platform: "pump"`
+   - `platformUrl`
+   - `deepLink`（若可行）
+   - `instructions`
+   - `candidateSummary`
+3. `opsBuy()` 至少返回：
+   - 当前是否 stub
+   - 是否已配置 sol wallet
+   - 后续待接入点
+4. `getStatus()` 可查询当前 job 状态
+5. 在 TG 通知和前端页面里加“下一步动作提示”
+
+要求：
+- 允许当前仍为半自动
+- 但必须是**清晰可执行的半自动**
+- 不能再只是“返回一个 stub 合约地址并打日志”
+
+验收标准：
+- 管理员能拿到明确 pump 跳转或操作说明
+- `launch_jobs` 会落完整状态
+- TG 通知里能显示 deep link / 操作提示
+
+---
+
+# P1（P0 完成后继续）
+
+## P1-1：Telegram rename / resymbol / redesc 做成真实输入流
+目标：
+- 把当前“功能开发中”补成可用审批编辑流程
+
+必须实现：
+1. 点击 `rename`
+   - bot 发送 force-reply
+   - 等待管理员输入
+   - 更新 `candidates.token_name`
+   - 写 `audit_logs`
+2. 点击 `resymbol`
+   - 同上
+3. 点击 `redesc`
+   - 同上
+4. 增加输入超时/取消逻辑
+5. 增加输入合法性校验：
+   - 名称长度
+   - symbol 长度与字符限制
+   - desc 长度限制
+
+验收标准：
+- TG 内可以真实改名、改符号、改描述
+- 改完后重新发卡片或编辑原卡片内容
+- 数据库值真实更新
+
+---
+
+## P1-2：X 热点采集升级
+目标：
+- 将 `services/xTrends.ts` 从旧 v1 逻辑升级到更稳定的实现
+- 优先官方 v2 趋势接口
+- 没 token 时保留 mock fallback
+
+必须实现：
+1. 抽象趋势源：
+   - official_x_v2
+   - fallback_mock
+2. 标准化输出：
+   - topic
+   - region
+   - post_count
+   - engagement_score
+   - velocity_score
+   - raw_json
+3. `jobs/collectTrends.ts` 补齐缺失字段
+4. 审计日志记录数据源类型
+
+验收标准：
+- 有 token 时走真实源
+- 无 token 时可跑 mock
+- 数据库字段完整
+- 现有去重逻辑不被破坏
+
+---
+
+## P1-3：统一 launch_jobs 返回结构
+目标：
+- 补齐 job 维度关键信息，方便前端、TG、审计统一展示
+
+必须补充：
+- `platform`
+- `platform_url`
+- `ops_buy_template`
+
+如果当前 schema 缺列，请直接补 migration / db push。
+
+验收标准：
+- BSC / SOL 两侧 job 都有统一结构
+- admin API 返回完整字段
+- TG 通知读取统一字段
+
+---
+
+# P2（P1 完成后继续）
+
+## P2-1：补 candidates 缺失列
+目标：
+- 补 `score_total`
+- 补 `risk_flags`
+
+要求：
+- 不破坏现有数据
+- 有默认值或迁移逻辑
+- riskEngine 输出能直接写这两列
+
+验收标准：
+- `GET /admin/candidates` 返回这两列
+- 前端仪表板能显示
+
+---
+
+## P2-2：SOL ops_buy 接入真实 `@solana/web3.js`
+目标：
+- 让 `pumpAdapter.ts` 的 `opsBuy()` 从 stub 变成真实单钱包首买/转账能力
+
+要求：
+- 只能单 `sol_ops_buy`
+- 私钥不进日志
+- 有明确错误捕获
+- 结果写入 `launch_jobs.buyTxHash`
+
+验收标准：
+- 能跑一次真实签名
+- 审计日志完整
+- TG 通知完整
+
+---
+
+## P2-3：LaunchPipelinePage 增加内联编辑
+目标：
+- 不依赖 TG 也能在后台编辑：
+  - token_name
+  - token_symbol
+  - description
+- 与 TG 编辑逻辑保持一致
+
+验收标准：
+- 修改后数据库真实更新
+- 页面刷新后值保持一致
+- 写 audit_logs
+
+---
+
+# 必须修改/检查的文件
+
+优先检查并修改这些文件：
+
+- `adapters/fourAdapter.ts`
+- `adapters/pumpAdapter.ts`
+- `services/telegramBot.ts`
+- `services/xTrends.ts`
+- `jobs/collectTrends.ts`
+- `lib/db/src/schema/candidates.ts`
+- `lib/db/src/schema/launch-jobs.ts`
+- `routes/admin.ts`
+- `pages/LaunchPipelinePage.tsx`
+
+同时检查这些现有可复用文件，不要重写：
+- `lib/db/src/schema/audit-logs.ts`
+- `routes/health.ts`
+- `jobs/scheduler.ts`
+- `services/riskEngine.ts`
+- `services/walletService.ts`
+- `lib/config.ts`
+- `adapters/common.ts`
+
+---
+
+# 输出要求
+
+每完成一个阶段（P0 / P1 / P2），必须输出：
+
+1. **改动文件列表**
+2. **每个文件改了什么**
+3. **最小测试步骤**
+4. **测试结果**
+5. **还有哪些问题未解决**
+
+并且更新：
+- `docs/UPGRADE_NOTES.md`
+
+---
+
+# 最终验收标准
+
+完成后必须满足：
+
+## P0 验收
+- BSC fourAdapter 不再只是 stub
+- Telegram 审批链路真实跑通
+- Pump 半自动不再只是“假地址 + 日志”
+
+## P1 验收
+- TG 可真实改 name/symbol/desc
+- X 热点源更稳定
+- launch_jobs 返回统一结构
+
+## P2 验收
+- candidates / launch_jobs schema 完整
+- SOL ops_buy 真实可签名
+- 仪表板支持编辑
+
+---
+
+# 现在立刻开始
+
+不要只回复计划。  
+请按顺序直接：
+
+1. 先做 P0  
+2. 改代码  
+3. 安装缺失依赖  
+4. 自测  
+5. 修错  
+6. 输出 P0 完成报告  
+7. 再继续 P1  
+8. 再继续 P2
+
+开始执行。

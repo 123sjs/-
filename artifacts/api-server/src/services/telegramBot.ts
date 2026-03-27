@@ -14,6 +14,40 @@ const TELEGRAM_ADMIN_CHAT_ID = process.env["TELEGRAM_ADMIN_CHAT_ID"];
 
 let bot: Telegraf | null = null;
 
+type PendingField = "tokenName" | "tokenSymbol" | "description";
+interface PendingInput {
+  candidateId: number;
+  field: PendingField;
+  promptMessageId: number;
+  timestamp: number;
+}
+
+const pendingInputs = new Map<string, PendingInput>();
+const INPUT_TIMEOUT_MS = 5 * 60 * 1000;
+
+const FIELD_LABELS: Record<PendingField, string> = {
+  tokenName: "名称 (2–20 字符)",
+  tokenSymbol: "符号 (2–8 大写字母，如 DOGE)",
+  description: "描述 (10–300 字符)",
+};
+
+const FIELD_PROMPTS: Record<PendingField, string> = {
+  tokenName: "✏️ 请输入新的代币*名称*（2–20 字符），直接发送文字即可：",
+  tokenSymbol: "🔤 请输入新的代币*符号*（2–8 大写字母），如 `DOGE`：",
+  description: "📝 请输入新的代币*描述*（10–300 字符）：",
+};
+
+function validateFieldInput(field: PendingField, value: string): string | null {
+  if (field === "tokenName") {
+    if (value.length < 2 || value.length > 20) return "名称必须 2–20 字符";
+  } else if (field === "tokenSymbol") {
+    if (!/^[A-Z]{2,8}$/.test(value)) return "符号必须 2–8 大写英文字母（如 DOGE）";
+  } else if (field === "description") {
+    if (value.length < 10 || value.length > 300) return "描述必须 10–300 字符";
+  }
+  return null;
+}
+
 export function isTelegramEnabled(): boolean {
   return Boolean(TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID);
 }
@@ -51,21 +85,25 @@ function buildApprovalKeyboard(candidateId: number) {
 
 function buildCandidateMessage(candidate: Candidate): string {
   const riskEmoji = { low: "🟢", medium: "🟡", high: "🔴" }[candidate.riskLevel] ?? "⚪";
-  const chainEmoji = { bsc: "⟡ BSC", sol: "◎ SOL", both: "⟡ BSC + ◎ SOL" }[candidate.suggestedChain as string] ?? candidate.suggestedChain;
+  const chainEmoji = { bsc: "⟡ BSC", sol: "◎ SOL", both: "⟡ BSC \\+ ◎ SOL" }[candidate.suggestedChain as string] ?? candidate.suggestedChain;
+
+  const scoreStr = (candidate as Record<string, unknown>)["scoreTotal"]
+    ? ` \\| Score: ${(candidate as Record<string, unknown>)["scoreTotal"]}`
+    : "";
 
   return [
     `🆕 *候选代币审批*`,
     ``,
     `*名称：* ${escapeMarkdown(candidate.tokenName)}`,
     `*符号：* \`${candidate.tokenSymbol}\``,
-    `*描述：* ${escapeMarkdown(candidate.description)}`,
-    `*叙事：* ${escapeMarkdown(candidate.narrative ?? "")}`,
+    `*描述：* ${escapeMarkdown(candidate.description.slice(0, 100))}`,
+    candidate.narrative ? `*叙事：* ${escapeMarkdown(candidate.narrative.slice(0, 80))}` : null,
     ``,
-    `*风险：* ${riskEmoji} ${candidate.riskLevel.toUpperCase()}`,
+    `*风险：* ${riskEmoji} ${candidate.riskLevel.toUpperCase()}${scoreStr}`,
     `*推荐链：* ${chainEmoji}`,
     `*状态：* \`${candidate.status}\``,
     `*候选ID：* \`${candidate.id}\``,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function escapeMarkdown(text: string): string {
@@ -111,6 +149,15 @@ async function createLaunchJob(candidateId: number, chain: "bsc" | "sol", buyTie
   return job as LaunchJob;
 }
 
+function cleanExpiredPendingInputs() {
+  const now = Date.now();
+  for (const [key, pending] of pendingInputs.entries()) {
+    if (now - pending.timestamp > INPUT_TIMEOUT_MS) {
+      pendingInputs.delete(key);
+    }
+  }
+}
+
 export function initTelegramBot(): void {
   if (!TELEGRAM_BOT_TOKEN) {
     logger.warn("TELEGRAM_BOT_TOKEN not set — Telegram bot disabled");
@@ -132,6 +179,91 @@ export function initTelegramBot(): void {
     const pending = candidates.filter((c) => c.status === "pending_review").length;
     const approved = candidates.filter((c) => c.status.startsWith("approved")).length;
     ctx.reply(`📊 Candidates: ${candidates.length} total | ${pending} pending | ${approved} approved`);
+  });
+
+  bot.on("text", async (ctx, next) => {
+    cleanExpiredPendingInputs();
+
+    const chatId = String(ctx.chat.id);
+    const replyToId = ctx.message.reply_to_message?.message_id;
+
+    if (!replyToId) {
+      return next();
+    }
+
+    const pendingKey = `${chatId}:${replyToId}`;
+    const pending = pendingInputs.get(pendingKey);
+
+    if (!pending) {
+      return next();
+    }
+
+    const elapsed = Date.now() - pending.timestamp;
+    if (elapsed > INPUT_TIMEOUT_MS) {
+      pendingInputs.delete(pendingKey);
+      await ctx.reply("⏰ 输入超时（5分钟），请重新点击按钮。");
+      return;
+    }
+
+    pendingInputs.delete(pendingKey);
+
+    const rawInput = ctx.message.text.trim();
+    const normalizedInput = pending.field === "tokenSymbol" ? rawInput.toUpperCase() : rawInput;
+
+    const validationError = validateFieldInput(pending.field, normalizedInput);
+    if (validationError) {
+      await ctx.reply(`❌ 输入无效：${validationError}\n\n请重新点击按钮重试。`);
+      return;
+    }
+
+    try {
+      const [candidate] = await db
+        .select()
+        .from(candidatesTable)
+        .where(eq(candidatesTable.id, pending.candidateId))
+        .limit(1);
+
+      if (!candidate) {
+        await ctx.reply("❌ 候选不存在，可能已被删除。");
+        return;
+      }
+
+      const oldValue = candidate[pending.field];
+      await updateCandidateStatus(pending.candidateId, { [pending.field]: normalizedInput });
+
+      await writeAuditLog(`candidate_${pending.field}_edited`, "candidate", pending.candidateId, "telegram_admin", {
+        field: pending.field,
+        oldValue,
+        newValue: normalizedInput,
+      });
+
+      const updatedCandidate = { ...candidate, [pending.field]: normalizedInput };
+      const fieldLabel = FIELD_LABELS[pending.field];
+
+      await ctx.reply(
+        `✅ *${fieldLabel}已更新*\n\n旧值：${escapeMarkdown(String(oldValue))}\n新值：${escapeMarkdown(normalizedInput)}`,
+        { parse_mode: "MarkdownV2" },
+      );
+
+      if (TELEGRAM_ADMIN_CHAT_ID) {
+        await bot!.telegram.sendMessage(
+          TELEGRAM_ADMIN_CHAT_ID,
+          `${buildCandidateMessage(updatedCandidate as Candidate)}\n\n✏️ *已更新 ${escapeMarkdown(fieldLabel)}*`,
+          {
+            parse_mode: "MarkdownV2",
+            ...buildApprovalKeyboard(pending.candidateId),
+          },
+        );
+      }
+
+      logger.info(
+        { candidateId: pending.candidateId, field: pending.field, newValue: normalizedInput },
+        "Candidate field updated via Telegram",
+      );
+    } catch (err) {
+      logger.error({ err: String(err), candidateId: pending.candidateId }, "Failed to update candidate via Telegram");
+      await ctx.reply("❌ 更新失败，请稍后重试。");
+    }
   });
 
   bot.on("callback_query", async (ctx) => {
@@ -256,14 +388,43 @@ export function initTelegramBot(): void {
         }
 
         case "rename":
-          await ctx.answerCbQuery("请直接回复此消息输入新名称（功能开发中）");
-          break;
         case "resymbol":
-          await ctx.answerCbQuery("请直接回复此消息输入新符号（功能开发中）");
+        case "redesc": {
+          const fieldMap: Record<string, PendingField> = {
+            rename: "tokenName",
+            resymbol: "tokenSymbol",
+            redesc: "description",
+          };
+          const field = fieldMap[action]!;
+          const prompt = FIELD_PROMPTS[field];
+          const chatId = String(ctx.chat?.id ?? TELEGRAM_ADMIN_CHAT_ID);
+
+          await ctx.answerCbQuery(`请直接回复 bot 发出的下一条消息`);
+
+          const promptMsg = await bot!.telegram.sendMessage(
+            chatId,
+            prompt,
+            {
+              parse_mode: "MarkdownV2",
+              reply_markup: { force_reply: true, selective: true },
+            },
+          );
+
+          cleanExpiredPendingInputs();
+          const pendingKey = `${chatId}:${promptMsg.message_id}`;
+          pendingInputs.set(pendingKey, {
+            candidateId,
+            field,
+            promptMessageId: promptMsg.message_id,
+            timestamp: Date.now(),
+          });
+
+          logger.info(
+            { candidateId, field, promptMessageId: promptMsg.message_id, pendingKey },
+            "Telegram: waiting for field input",
+          );
           break;
-        case "redesc":
-          await ctx.answerCbQuery("请直接回复此消息输入新描述（功能开发中）");
-          break;
+        }
 
         default:
           await ctx.answerCbQuery("Unknown action");
@@ -318,22 +479,40 @@ export async function sendCandidateForApproval(candidate: Candidate): Promise<bo
 export async function sendLaunchResult(job: LaunchJob, tokenName: string): Promise<void> {
   if (!bot || !TELEGRAM_ADMIN_CHAT_ID) return;
 
-  const statusEmoji = job.status === "bought" ? "✅" : job.status === "failed" ? "❌" : "ℹ️";
+  const statusEmoji = job.status === "bought" ? "✅" : job.status === "failed" ? "❌" : job.status === "deployed" ? "🚀" : "ℹ️";
   const chain = job.chain.toUpperCase();
+  const jobAny = job as Record<string, unknown>;
 
-  const lines = [
+  const lines: string[] = [
     `${statusEmoji} *发射结果* — ${escapeMarkdown(tokenName)}`,
     `*链：* ${chain}`,
+    `*平台：* ${escapeMarkdown(String(jobAny["platform"] ?? "unknown"))}`,
+    `*模式：* ${escapeMarkdown(String(jobAny["launchMode"] ?? "unknown"))}`,
     `*状态：* \`${job.status}\``,
-    job.contractAddress ? `*合约：* \`${job.contractAddress}\`` : null,
-    job.deployTxHash ? `*部署TX：* \`${job.deployTxHash.slice(0, 16)}\\.\\.\\.\`` : null,
-    job.buyTxHash ? `*首买TX：* \`${job.buyTxHash.slice(0, 16)}\\.\\.\\.\`` : null,
-    job.buyAmount ? `*首买额：* ${job.buyAmount}` : null,
-    job.errorMessage ? `*错误：* ${escapeMarkdown(job.errorMessage.slice(0, 100))}` : null,
-  ].filter(Boolean).join("\n");
+  ];
+
+  if (job.contractAddress) lines.push(`*合约：* \`${job.contractAddress}\``);
+  if (job.deployTxHash) lines.push(`*部署TX：* \`${job.deployTxHash.slice(0, 16)}\\.\\.\\.\``);
+  if (job.buyTxHash) lines.push(`*首买TX：* \`${job.buyTxHash.slice(0, 16)}\\.\\.\\.\``);
+  if (job.buyAmount) lines.push(`*首买额：* ${escapeMarkdown(job.buyAmount)}`);
+  if (jobAny["opsWalletLabel"]) lines.push(`*钱包：* \`${String(jobAny["opsWalletLabel"])}\``);
+
+  if (jobAny["deepLink"]) {
+    lines.push(``, `*⬇️ 下一步操作：*`);
+    lines.push(`[点击在 Pump\\.fun 创建 Token](${String(jobAny["deepLink"])})`);
+  } else if (jobAny["platformUrl"]) {
+    lines.push(`*平台链接：* ${escapeMarkdown(String(jobAny["platformUrl"]))}`);
+  }
+
+  if (job.errorMessage) {
+    lines.push(`*错误：* ${escapeMarkdown(job.errorMessage.slice(0, 150))}`);
+  }
 
   try {
-    await bot.telegram.sendMessage(TELEGRAM_ADMIN_CHAT_ID, lines, { parse_mode: "MarkdownV2" });
+    await bot.telegram.sendMessage(TELEGRAM_ADMIN_CHAT_ID, lines.join("\n"), {
+      parse_mode: "MarkdownV2",
+      link_preview_options: { is_disabled: true },
+    });
   } catch (err) {
     logger.error({ err: String(err) }, "Failed to send launch result to Telegram");
   }

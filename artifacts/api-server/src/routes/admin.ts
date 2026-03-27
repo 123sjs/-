@@ -123,35 +123,47 @@ router.post("/admin/run-launch/:jobId", async (req, res) => {
 
     await db.update(launchJobsTable).set({
       status: "deployed",
-      contractAddress: launchResult.contractAddress,
-      deployTxHash: launchResult.deployTxHash,
+      platform: launchResult.platform,
+      platformUrl: launchResult.platformUrl ?? null,
+      launchMode: launchResult.launchMode,
+      deepLink: launchResult.deepLink ?? null,
+      instructions: launchResult.instructions ?? null,
+      contractAddress: launchResult.contractAddress ?? null,
+      deployTxHash: launchResult.deployTxHash ?? null,
       deployedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(launchJobsTable.id, jobId));
     await writeAuditLog("launch_deployed", "launch_job", jobId, "api", {
+      platform: launchResult.platform,
+      launchMode: launchResult.launchMode,
       contractAddress: launchResult.contractAddress,
       deployTxHash: launchResult.deployTxHash,
+      deepLink: launchResult.deepLink,
     });
 
     let buyResult = null;
     if (job.buyTier) {
       await db.update(launchJobsTable).set({ status: "buying", updatedAt: new Date() }).where(eq(launchJobsTable.id, jobId));
-      const br = await adapter.opsBuy(payload);
+      const opsBuyPayload = { ...payload, contractAddress: launchResult.contractAddress ?? null };
+      const br = await adapter.opsBuy(opsBuyPayload);
       buyResult = br;
 
       await db.update(launchJobsTable).set({
-        status: br.ok ? "bought" : "failed",
-        buyTxHash: br.txHash,
-        buyAmount: br.amountSpent,
+        status: br.ok ? "bought" : (br.isStub ? "deployed" : "failed"),
+        opsWalletLabel: br.walletLabel ?? null,
+        buyTxHash: br.txHash ?? null,
+        buyAmount: br.amountSpent ?? null,
         boughtAt: br.ok ? new Date() : null,
-        errorMessage: br.ok ? null : br.errorMessage,
+        errorMessage: br.ok ? null : (br.isStub ? `[stub] ${br.errorMessage}` : (br.errorMessage ?? null)),
         updatedAt: new Date(),
       }).where(eq(launchJobsTable.id, jobId));
 
-      await writeAuditLog(br.ok ? "ops_buy_success" : "ops_buy_failed", "launch_job", jobId, "api", {
+      await writeAuditLog(br.ok ? "ops_buy_success" : (br.isStub ? "ops_buy_stub" : "ops_buy_failed"), "launch_job", jobId, "api", {
         tier: job.buyTier,
         txHash: br.txHash,
         amount: br.amountSpent,
+        walletLabel: br.walletLabel,
+        isStub: br.isStub,
         error: br.errorMessage,
       });
     } else {
@@ -167,6 +179,10 @@ router.post("/admin/run-launch/:jobId", async (req, res) => {
       ok: true,
       jobId,
       chain: job.chain,
+      platform: launchResult.platform,
+      launchMode: launchResult.launchMode,
+      deepLink: launchResult.deepLink,
+      instructions: launchResult.instructions,
       contractAddress: launchResult.contractAddress,
       deployTxHash: launchResult.deployTxHash,
       buyResult,
@@ -288,6 +304,83 @@ router.post("/admin/wallets", async (req, res) => {
     });
 
     res.status(201).json({ ok: true, wallet: inserted });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+router.patch("/admin/candidates/:id", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || Number.isNaN(id)) {
+    res.status(400).json({ ok: false, error: "Invalid candidate id" });
+    return;
+  }
+
+  const allowed = ["tokenName", "tokenSymbol", "description"] as const;
+  type AllowedKey = typeof allowed[number];
+  const updates: Partial<Record<AllowedKey, string>> = {};
+
+  for (const key of allowed) {
+    if (key in req.body && typeof req.body[key] === "string" && (req.body[key] as string).trim().length > 0) {
+      updates[key] = (req.body[key] as string).trim();
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ ok: false, error: "No valid fields to update (allowed: tokenName, tokenSymbol, description)" });
+    return;
+  }
+
+  try {
+    const [existing] = await db.select().from(candidatesTable).where(eq(candidatesTable.id, id)).limit(1);
+    if (!existing) {
+      res.status(404).json({ ok: false, error: "Candidate not found" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(candidatesTable)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(candidatesTable.id, id))
+      .returning();
+
+    await writeAuditLog("candidate_edited", "candidate", id, "admin_api", { updates, previous: { tokenName: existing.tokenName, tokenSymbol: existing.tokenSymbol, description: existing.description } });
+
+    res.json({ ok: true, candidate: updated });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+router.patch("/admin/launch-jobs/:id/contract", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || Number.isNaN(id)) {
+    res.status(400).json({ ok: false, error: "Invalid job id" });
+    return;
+  }
+
+  const { contractAddress } = req.body as { contractAddress?: string };
+  if (!contractAddress || !contractAddress.trim()) {
+    res.status(400).json({ ok: false, error: "contractAddress is required" });
+    return;
+  }
+
+  try {
+    const [job] = await db.select().from(launchJobsTable).where(eq(launchJobsTable.id, id)).limit(1);
+    if (!job) {
+      res.status(404).json({ ok: false, error: "Launch job not found" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(launchJobsTable)
+      .set({ contractAddress: contractAddress.trim(), updatedAt: new Date() })
+      .where(eq(launchJobsTable.id, id))
+      .returning();
+
+    await writeAuditLog("launch_job_contract_updated", "launch_job", id, "admin_api", { contractAddress: contractAddress.trim() });
+
+    res.json({ ok: true, launchJob: updated });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
   }

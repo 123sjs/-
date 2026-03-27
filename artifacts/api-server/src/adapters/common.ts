@@ -5,21 +5,30 @@ export interface LaunchPayload {
   tokenSymbol: string;
   description: string;
   logoUrl: string | null;
+  contractAddress?: string | null;
   buyTier?: string | null;
   chain: "bsc" | "sol";
 }
 
 export interface LaunchResult {
   ok: boolean;
+  platform: string;
+  platformUrl?: string;
   contractAddress?: string;
   deployTxHash?: string;
+  launchMode: "real" | "stub" | "manual_final";
+  instructions?: string;
+  deepLink?: string;
   errorMessage?: string;
+  raw?: Record<string, unknown>;
 }
 
 export interface BuyResult {
   ok: boolean;
   txHash?: string;
   amountSpent?: string;
+  walletLabel?: string;
+  isStub?: boolean;
   errorMessage?: string;
 }
 
