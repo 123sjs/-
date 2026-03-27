@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ChevronDown, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "./ui/Button";
+import { Button } from "./ui/button";
 
 const FAQs = [
   {

@@ -1,23 +1,22 @@
-import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import * as React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { X } from "lucide-react"
+import { cn } from "@/lib/utils"
 
-interface DialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  children: React.ReactNode;
-  className?: string;
+interface AppDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  children: React.ReactNode
+  className?: string
 }
 
-export function Dialog({ open, onOpenChange, title, children, className }: DialogProps) {
-  // Prevent scrolling when open
+export function AppDialog({ open, onOpenChange, title, children, className }: AppDialogProps) {
   React.useEffect(() => {
-    if (open) document.body.style.overflow = 'hidden';
-    else document.body.style.overflow = 'unset';
-    return () => { document.body.style.overflow = 'unset'; }
-  }, [open]);
+    if (open) document.body.style.overflow = "hidden"
+    else document.body.style.overflow = "unset"
+    return () => { document.body.style.overflow = "unset" }
+  }, [open])
 
   return (
     <AnimatePresence>
@@ -38,8 +37,8 @@ export function Dialog({ open, onOpenChange, title, children, className }: Dialo
           >
             <div className={cn("bg-card border border-border shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[85vh]", className)}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-white/5">
-                <h2 className="text-lg font-bold font-display">{title}</h2>
-                <button 
+                <h2 className="text-lg font-bold">{title}</h2>
+                <button
                   onClick={() => onOpenChange(false)}
                   className="p-2 rounded-full hover:bg-white/10 transition-colors text-muted-foreground hover:text-white"
                 >
@@ -54,5 +53,5 @@ export function Dialog({ open, onOpenChange, title, children, className }: Dialo
         </>
       )}
     </AnimatePresence>
-  );
+  )
 }

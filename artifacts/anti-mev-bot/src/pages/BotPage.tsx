@@ -35,7 +35,7 @@ export default function BotPage() {
         
         // Mock a transaction
         const isBuy = Math.random() > 0.5;
-        const amount = config.amountMode === 'Fixed Amount' 
+        const amount = config.amountMode === 'Fixed'
           ? config.amountBNB.toFixed(4)
           : (Math.random() * config.amountBNB).toFixed(4);
           

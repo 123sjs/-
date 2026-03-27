@@ -5,9 +5,18 @@ import {
   Banknote, Settings, Box, Bot, ChevronDown, Rocket, Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SiSolana, SiEthereum, SiBinance } from "react-icons/si";
+import { SiSolana } from "react-icons/si";
 
-const navItems = [
+type NavChild = { label: string; href: string; active?: boolean };
+type NavItem = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  href: string;
+  active?: boolean;
+  children?: NavChild[];
+};
+
+const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { 
     icon: SiSolana, label: "SOL", href: "#", 

@@ -1,21 +1,31 @@
 import * as React from "react";
 import { useBotStore, type BotConfig } from "@/store/use-bot-store";
-import { Input } from "./ui/Input";
-import { Button } from "./ui/Button";
-import { Checkbox } from "./ui/Checkbox";
-import { Switch } from "./ui/Switch";
-import { SiBinance, SiEthereum, SiSolana } from "react-icons/si";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Switch } from "./ui/switch";
+import { SiBinance } from "react-icons/si";
 import { Settings, Zap, Repeat, Search, Layers, Play, Square, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DEX_OPTIONS = [
   { id: 'Auto(V3&V2)', label: '⚡️ Auto(V3&V2)' },
-  { id: 'MetaMask Swap', label: 'MetaMask Swap', img: '🦊' },
+  { id: 'MetaMask Swap', label: '🦊 MetaMask Swap' },
   { id: 'Flap', label: 'Flap' },
-  { id: 'pancakeV2', label: 'PancakeV2', icon: SiBinance },
+  { id: 'pancakeV2', label: '🥞 PancakeV2' },
   { id: 'pancakePump', label: 'PumpSpringBoard' },
   { id: 'FOUR.MEME', label: 'FOUR.MEME' },
 ];
+
+const AMOUNT_MODES: Array<{ id: BotConfig['amountMode']; label: string }> = [
+  { id: 'All', label: 'All Amount' },
+  { id: 'Random', label: 'Random Amount' },
+  { id: 'Percent', label: 'Percent Amount %' },
+  { id: 'Fixed', label: 'Fixed Amount' },
+  { id: 'Fixed Retention', label: 'Fixed Retention' },
+];
+
+const GAS_MODES: Array<BotConfig['gasPriceMode']> = ['Fixed', 'Auto', 'Random'];
 
 export function ConfigPanel() {
   const { config, updateConfig, startBot, stopBot, isRunning, stats, runsCompleted } = useBotStore();
@@ -140,8 +150,6 @@ export function ConfigPanel() {
                     : "border-white/5 bg-black/20 text-muted-foreground hover:bg-white/5 hover:border-white/10"
                 )}
               >
-                {dex.img && <span>{dex.img}</span>}
-                {dex.icon && <dex.icon className="text-[#F3BA2F]" />}
                 <span className="font-medium truncate">{dex.label}</span>
               </div>
             ))}
@@ -151,16 +159,16 @@ export function ConfigPanel() {
         <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
           <label className="text-xs text-muted-foreground block mb-2">Swap Amount (BNB)</label>
           <div className="flex flex-wrap gap-2">
-            {['All Amount', 'Random Amount', 'Percent Amount %', 'Fixed Amount', 'Fixed Retention'].map(mode => (
+            {AMOUNT_MODES.map(({ id, label }) => (
               <button
-                key={mode}
-                onClick={() => updateConfig({ amountMode: mode as BotConfig['amountMode'] })}
+                key={id}
+                onClick={() => updateConfig({ amountMode: id })}
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs transition-colors",
-                  config.amountMode === mode ? "bg-primary text-black font-medium" : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white"
+                  config.amountMode === id ? "bg-primary text-black font-medium" : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white"
                 )}
               >
-                {mode}
+                {label}
               </button>
             ))}
           </div>
@@ -215,10 +223,10 @@ export function ConfigPanel() {
           <div className="space-y-3">
             <label className="text-xs text-muted-foreground block">Gas Price (gwei)</label>
             <div className="flex bg-black/40 rounded-lg p-1">
-              {['Fixed', 'Auto', 'Random'].map(m => (
+              {GAS_MODES.map(m => (
                 <button 
                   key={m}
-                  onClick={() => updateConfig({ gasPriceMode: m as any })}
+                  onClick={() => updateConfig({ gasPriceMode: m })}
                   className={cn("flex-1 text-[10px] py-1.5 rounded-md transition-colors", config.gasPriceMode === m ? "bg-white/10 text-white" : "text-muted-foreground")}
                 >{m}</button>
               ))}
@@ -233,10 +241,10 @@ export function ConfigPanel() {
           <div className="space-y-3">
             <label className="text-xs text-muted-foreground block">Gas Limit</label>
             <div className="flex bg-black/40 rounded-lg p-1">
-              {['Fixed', 'Auto', 'Random'].map(m => (
+              {GAS_MODES.map(m => (
                 <button 
                   key={m}
-                  onClick={() => updateConfig({ gasLimitMode: m as any })}
+                  onClick={() => updateConfig({ gasLimitMode: m })}
                   className={cn("flex-1 text-[10px] py-1.5 rounded-md transition-colors", config.gasLimitMode === m ? "bg-white/10 text-white" : "text-muted-foreground")}
                 >{m}</button>
               ))}

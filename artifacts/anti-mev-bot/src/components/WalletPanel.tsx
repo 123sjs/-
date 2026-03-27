@@ -1,10 +1,10 @@
 import * as React from "react";
 import { useBotStore } from "@/store/use-bot-store";
-import { Button } from "./ui/Button";
-import { Checkbox } from "./ui/Checkbox";
-import { Dialog } from "./ui/Dialog";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { AppDialog } from "./ui/app-dialog";
 import { formatAddress } from "@/lib/utils";
-import { Download, RefreshCw, Trash2, Activity, Banknote } from "lucide-react";
+import { Download, RefreshCw, Trash2, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
@@ -123,7 +123,7 @@ export function WalletPanel() {
         )}
       </div>
 
-      <Dialog open={importOpen} onOpenChange={setImportOpen} title="Import Wallets">
+      <AppDialog open={importOpen} onOpenChange={setImportOpen} title="Import Wallets">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Paste your private keys below, one per line. They remain in your browser's local memory.
@@ -139,7 +139,7 @@ export function WalletPanel() {
             <Button onClick={handleImport} className="min-w-[120px]">Import</Button>
           </div>
         </div>
-      </Dialog>
+      </AppDialog>
     </div>
   );
 }
