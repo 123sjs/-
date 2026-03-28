@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/i18n/useLang";
 
 type TrendTopic = {
   id: number;
@@ -95,29 +96,11 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   failed: <XCircle className="w-3.5 h-3.5 text-red-400" />,
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending_review: "Pending Review",
-  approved: "Approved",
-  approved_bsc: "Approved BSC",
-  approved_sol: "Approved SOL",
-  approved_both: "Approved Both",
-  rejected: "Rejected",
-  blacklisted: "Blacklisted",
-  launched: "Launched",
-  pending: "Pending",
-  deploying: "Deploying",
-  deployed: "Deployed",
-  manual_final: "Manual Required",
-  buying: "Buying",
-  bought: "Bought",
-  failed: "Failed",
-};
-
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, labels }: { status: string; labels: Record<string, string> }) {
   return (
     <span className="flex items-center gap-1.5 text-xs">
       {STATUS_ICONS[status] ?? <Clock className="w-3.5 h-3.5 text-muted-foreground" />}
-      <span className="text-muted-foreground">{STATUS_LABELS[status] ?? status}</span>
+      <span className="text-muted-foreground">{labels[status] ?? status}</span>
     </span>
   );
 }
@@ -181,6 +164,8 @@ function EmptyRow({ cols, message }: { cols: number; message: string }) {
 }
 
 export default function LaunchPipelinePage() {
+  const { t } = useLang();
+  const pt = t.pipeline;
   const [trends, setTrends] = React.useState<TrendTopic[]>([]);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [jobs, setJobs] = React.useState<LaunchJob[]>([]);
@@ -344,10 +329,10 @@ export default function LaunchPipelinePage() {
         {/* Header */}
         <header className="h-16 shrink-0 border-b border-white/5 flex items-center justify-between px-6">
           <div>
-            <p className="text-xs text-muted-foreground">Dashboard / Launch Pipeline</p>
+            <p className="text-xs text-muted-foreground">{t.header.dashboard} / {pt.title}</p>
             <h1 className="text-sm font-semibold text-white flex items-center gap-2">
               <Rocket className="w-4 h-4 text-primary" />
-              Token Launch Pipeline
+              {pt.title}
             </h1>
           </div>
           <button
@@ -355,7 +340,7 @@ export default function LaunchPipelinePage() {
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-white transition-colors"
           >
             <RefreshCcw className="w-3.5 h-3.5" />
-            Refresh
+            {t.header.refresh}
           </button>
         </header>
 
@@ -373,18 +358,16 @@ export default function LaunchPipelinePage() {
 
         {/* Pipeline Controls Bar */}
         <div className="shrink-0 px-6 py-3 border-b border-white/5 bg-black/20 flex flex-wrap items-center gap-3">
-          <span className="text-xs text-muted-foreground font-medium mr-1">Pipeline Steps:</span>
-
           <PipelineButton onClick={handleRunTrends} loading={runningTrends}>
-            1. Scrape X Trends
+            1. {pt.runTrends}
           </PipelineButton>
 
           <div className="flex items-center gap-2">
             <PipelineButton onClick={handleRunCandidates} loading={runningCandidates} variant="secondary">
-              2. Generate Candidates (AI)
+              2. {pt.runCandidates}
             </PipelineButton>
             <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">Limit:</span>
+              <span className="text-xs text-muted-foreground">{pt.limitLabel}</span>
               <select
                 value={candidateLimit}
                 onChange={e => setCandidateLimit(Number(e.target.value))}
@@ -396,10 +379,6 @@ export default function LaunchPipelinePage() {
               </select>
             </div>
           </div>
-
-          <span className="text-xs text-muted-foreground ml-auto">
-            Auto-refresh every 30s · Telegram approve → creates launch job
-          </span>
         </div>
 
         {/* Main Content */}
@@ -408,10 +387,10 @@ export default function LaunchPipelinePage() {
           {/* Stats Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: "Trends Tracked", value: trends.length, icon: <TrendingUp className="w-4 h-4" />, color: "text-blue-400" },
-              { label: "Candidates", value: candidates.length, icon: <Bot className="w-4 h-4" />, color: "text-violet-400" },
-              { label: "Pending Review", value: candidates.filter(c => c.status === "pending_review").length, icon: <Clock className="w-4 h-4" />, color: "text-yellow-400" },
-              { label: "Launch Jobs", value: jobs.length, icon: <Rocket className="w-4 h-4" />, color: "text-primary" },
+              { label: pt.trends, value: trends.length, icon: <TrendingUp className="w-4 h-4" />, color: "text-blue-400" },
+              { label: pt.candidates, value: candidates.length, icon: <Bot className="w-4 h-4" />, color: "text-violet-400" },
+              { label: pt.statusLabels.pending_review, value: candidates.filter(c => c.status === "pending_review").length, icon: <Clock className="w-4 h-4" />, color: "text-yellow-400" },
+              { label: pt.jobs, value: jobs.length, icon: <Rocket className="w-4 h-4" />, color: "text-primary" },
             ].map(stat => (
               <div key={stat.label} className="bg-card border border-white/5 rounded-xl p-4 flex items-center gap-3">
                 <span className={stat.color}>{stat.icon}</span>
@@ -425,7 +404,7 @@ export default function LaunchPipelinePage() {
 
           {/* Trends Table */}
           <SectionCard
-            title="X Trending Topics"
+            title={pt.trends}
             icon={<TrendingUp className="w-4 h-4" />}
             action={
               loadingTrends ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : null
@@ -435,21 +414,21 @@ export default function LaunchPipelinePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-white/5">
-                    <th className="text-left px-5 py-2.5 font-medium">Topic</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Source</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Collected</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colTopic}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colSource}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colTime}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {trends.length === 0
-                    ? <EmptyRow cols={3} message="No trends yet — click 'Scrape X Trends'" />
-                    : trends.slice(0, 10).map(t => (
-                      <tr key={t.id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
-                        <td className="px-5 py-2.5 font-medium text-white">{t.topic}</td>
+                    ? <EmptyRow cols={3} message={pt.noTrends} />
+                    : trends.slice(0, 10).map(tr => (
+                      <tr key={tr.id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
+                        <td className="px-5 py-2.5 font-medium text-white">{tr.topic}</td>
                         <td className="px-5 py-2.5">
-                          <span className="text-xs px-2 py-0.5 rounded bg-white/5 text-muted-foreground">{t.source}</span>
+                          <span className="text-xs px-2 py-0.5 rounded bg-white/5 text-muted-foreground">{tr.source}</span>
                         </td>
-                        <td className="px-5 py-2.5 text-muted-foreground text-xs">{formatTime(t.createdAt)}</td>
+                        <td className="px-5 py-2.5 text-muted-foreground text-xs">{formatTime(tr.createdAt)}</td>
                       </tr>
                     ))
                   }
@@ -460,7 +439,7 @@ export default function LaunchPipelinePage() {
 
           {/* Candidates Table */}
           <SectionCard
-            title="AI-Generated Candidates"
+            title={pt.candidates}
             icon={<Bot className="w-4 h-4" />}
             action={
               loadingCandidates ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : null
@@ -471,16 +450,16 @@ export default function LaunchPipelinePage() {
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-white/5">
                     <th className="w-8 px-2 py-2.5" />
-                    <th className="text-left px-4 py-2.5 font-medium">Token</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Chain</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Risk</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Status</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Created</th>
+                    <th className="text-left px-4 py-2.5 font-medium">{pt.colToken}</th>
+                    <th className="text-left px-4 py-2.5 font-medium">{pt.colChain}</th>
+                    <th className="text-left px-4 py-2.5 font-medium">{pt.colRisk}</th>
+                    <th className="text-left px-4 py-2.5 font-medium">{pt.colStatus}</th>
+                    <th className="text-left px-4 py-2.5 font-medium">{pt.colTime}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {candidates.length === 0
-                    ? <EmptyRow cols={6} message="No candidates yet — click 'Generate Candidates (AI)'" />
+                    ? <EmptyRow cols={6} message={pt.noCandidates} />
                     : candidates.map(c => (
                       <React.Fragment key={c.id}>
                         <tr
@@ -519,7 +498,7 @@ export default function LaunchPipelinePage() {
                               {c.riskLevel}
                             </span>
                           </td>
-                          <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                          <td className="px-4 py-3"><StatusBadge status={c.status} labels={pt.statusLabels} /></td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{formatTime(c.createdAt)}</td>
                         </tr>
                         {expandedCandidate === c.id && (
@@ -528,7 +507,7 @@ export default function LaunchPipelinePage() {
                               {editingCandidate === c.id ? (
                                 <div className="space-y-3 max-w-2xl">
                                   <div className="flex items-center justify-between mb-1">
-                                    <p className="text-xs font-semibold text-white uppercase tracking-wide">Edit Candidate</p>
+                                    <p className="text-xs font-semibold text-white uppercase tracking-wide">{pt.editTitle}</p>
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSaveEdit(c.id)}
@@ -536,19 +515,19 @@ export default function LaunchPipelinePage() {
                                         className="flex items-center gap-1.5 text-xs px-3 py-1 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 rounded transition-colors disabled:opacity-50"
                                       >
                                         {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                        Save
+                                        {pt.editSave}
                                       </button>
                                       <button
                                         onClick={() => setEditingCandidate(null)}
                                         className="flex items-center gap-1.5 text-xs px-3 py-1 bg-white/5 text-muted-foreground hover:text-white rounded transition-colors"
                                       >
-                                        <X className="w-3 h-3" /> Cancel
+                                        <X className="w-3 h-3" /> {pt.editCancel}
                                       </button>
                                     </div>
                                   </div>
                                   <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                      <label className="block text-xs text-muted-foreground mb-1">Token Name (2–20 chars)</label>
+                                      <label className="block text-xs text-muted-foreground mb-1">{pt.fieldName}</label>
                                       <input
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50"
                                         value={editDraft.tokenName}
@@ -557,7 +536,7 @@ export default function LaunchPipelinePage() {
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-xs text-muted-foreground mb-1">Symbol (2–8 UPPERCASE)</label>
+                                      <label className="block text-xs text-muted-foreground mb-1">{pt.fieldSymbol}</label>
                                       <input
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50 uppercase"
                                         value={editDraft.tokenSymbol}
@@ -567,7 +546,7 @@ export default function LaunchPipelinePage() {
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="block text-xs text-muted-foreground mb-1">Description (10–300 chars)</label>
+                                    <label className="block text-xs text-muted-foreground mb-1">{pt.fieldDesc}</label>
                                     <textarea
                                       className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50 resize-none"
                                       rows={3}
@@ -580,13 +559,13 @@ export default function LaunchPipelinePage() {
                               ) : (
                                 <div className="space-y-2 max-w-2xl">
                                   <div className="flex items-center justify-between">
-                                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Candidate Details</p>
+                                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{pt.detailsTitle}</p>
                                     {c.status === "pending_review" && (
                                       <button
                                         onClick={() => handleStartEdit(c)}
                                         className="flex items-center gap-1.5 text-xs px-3 py-1 bg-white/5 text-muted-foreground hover:text-white hover:bg-white/10 rounded transition-colors"
                                       >
-                                        <Edit2 className="w-3 h-3" /> Edit Fields
+                                        <Edit2 className="w-3 h-3" /> {pt.editFields}
                                       </button>
                                     )}
                                   </div>
@@ -595,12 +574,12 @@ export default function LaunchPipelinePage() {
                                   <div className="flex flex-wrap gap-3 mt-1">
                                     {(c.bscBuyTier || c.solBuyTier) && (
                                       <span className="text-xs text-muted-foreground">
-                                        Buy tiers: BSC={c.bscBuyTier ?? "—"} / SOL={c.solBuyTier ?? "—"}
+                                        {pt.buyTiers}: BSC={c.bscBuyTier ?? "—"} / SOL={c.solBuyTier ?? "—"}
                                       </span>
                                     )}
                                     {c.scoreTotal != null && (
                                       <span className="text-xs px-2 py-0.5 rounded bg-white/5 text-muted-foreground">
-                                        Score: {c.scoreTotal}
+                                        {pt.score}: {c.scoreTotal}
                                       </span>
                                     )}
                                   </div>
@@ -619,7 +598,7 @@ export default function LaunchPipelinePage() {
 
           {/* Launch Jobs Table */}
           <SectionCard
-            title="Launch Jobs"
+            title={pt.jobs}
             icon={<Rocket className="w-4 h-4" />}
             action={
               loadingJobs ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : null
@@ -629,19 +608,19 @@ export default function LaunchPipelinePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-white/5">
-                    <th className="text-left px-5 py-2.5 font-medium">Job ID</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Candidate</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Chain / Platform</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Status</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Contract / Link</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Buy</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Updated</th>
-                    <th className="text-left px-5 py-2.5 font-medium">Action</th>
+                    <th className="text-left px-5 py-2.5 font-medium">ID</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.candidates}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colChain} / {pt.colPlatform}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colStatus}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colContract}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colBuy}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colTime}</th>
+                    <th className="text-left px-5 py-2.5 font-medium">{pt.colActions}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {jobs.length === 0
-                    ? <EmptyRow cols={8} message="No launch jobs yet — approve a candidate via Telegram" />
+                    ? <EmptyRow cols={8} message={pt.noJobs} />
                     : jobs.map(j => (
                       <tr key={j.id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
                         <td className="px-5 py-3 text-muted-foreground">#{j.id}</td>
@@ -663,7 +642,7 @@ export default function LaunchPipelinePage() {
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex flex-col gap-0.5">
-                            <StatusBadge status={j.status} />
+                            <StatusBadge status={j.status} labels={pt.statusLabels} />
                             {j.launchMode && j.launchMode !== "real" && (
                               <span className="text-xs text-orange-400/70">{j.launchMode}</span>
                             )}
@@ -720,7 +699,7 @@ export default function LaunchPipelinePage() {
                                 ? <Loader2 className="w-3 h-3 animate-spin" />
                                 : <Rocket className="w-3 h-3" />
                               }
-                              Launch
+                              {pt.launch}
                             </button>
                           )}
                           {j.errorMessage && (
@@ -739,18 +718,18 @@ export default function LaunchPipelinePage() {
 
           {/* Pipeline Flow Diagram */}
           <div className="bg-card border border-white/5 rounded-xl p-5">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Pipeline Flow</h2>
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">{pt.flowTitle}</h2>
             <div className="flex items-center gap-2 flex-wrap">
               {[
-                { step: "1", label: "X Trends", sublabel: "Scrape & store", color: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
+                { step: "1", label: pt.flow.trends, sublabel: pt.flow.trendsSub, color: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
                 { step: "→", label: "", sublabel: "", color: "" },
-                { step: "2", label: "AI Candidates", sublabel: "GPT-5-mini generates token concepts", color: "bg-violet-500/10 border-violet-500/20 text-violet-400" },
+                { step: "2", label: pt.flow.ai, sublabel: pt.flow.aiSub, color: "bg-violet-500/10 border-violet-500/20 text-violet-400" },
                 { step: "→", label: "", sublabel: "", color: "" },
-                { step: "3", label: "Telegram Review", sublabel: "Admin approve/reject", color: "bg-yellow-500/10 border-yellow-500/20 text-yellow-400" },
+                { step: "3", label: pt.flow.telegram, sublabel: pt.flow.telegramSub, color: "bg-yellow-500/10 border-yellow-500/20 text-yellow-400" },
                 { step: "→", label: "", sublabel: "", color: "" },
-                { step: "4", label: "Launch Job", sublabel: "BSC (four.meme) or SOL (pump.fun)", color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
+                { step: "4", label: pt.flow.launchJob, sublabel: pt.flow.launchJobSub, color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
                 { step: "→", label: "", sublabel: "", color: "" },
-                { step: "5", label: "Ops Buy", sublabel: "First-buy from ops wallet", color: "bg-primary/10 border-primary/20 text-primary" },
+                { step: "5", label: pt.flow.opsBuy, sublabel: pt.flow.opsBuySub, color: "bg-primary/10 border-primary/20 text-primary" },
               ].map((item, i) =>
                 item.label === "" ? (
                   <span key={i} className="text-muted-foreground text-lg">→</span>

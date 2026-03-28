@@ -4,12 +4,15 @@ import { WalletPanel } from "@/components/WalletPanel";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { BotLog } from "@/components/BotLog";
 import { FAQSection } from "@/components/FAQSection";
-import { RefreshCcw, X, Search, Bell } from "lucide-react";
+import { RefreshCcw, X, Bell } from "lucide-react";
 import { useBotStore } from "@/store/use-bot-store";
 import { formatAddress } from "@/lib/utils";
+import { useLang } from "@/i18n/useLang";
 
 export default function BotPage() {
   const { isRunning, wallets, config, addLog, stopBot } = useBotStore();
+  const { t } = useLang();
+  const h = t.header;
 
   // The Bot Simulation Loop
   React.useEffect(() => {
@@ -21,20 +24,17 @@ export default function BotPage() {
       const state = useBotStore.getState();
       const selectedWallets = state.wallets.filter(w => w.selected);
 
-      // Stop condition: no wallets selected; also stop if repeatRun is enabled and limit reached
       const repeatLimitReached = state.config.repeatRun && state.runsCompleted >= state.config.repeatTimes;
       if (selectedWallets.length === 0 || repeatLimitReached) {
         stopBot();
         return;
       }
 
-      // Pick a wallet based on execution order
       const wIdx = state.config.executionOrder === 'Random'
         ? Math.floor(Math.random() * selectedWallets.length)
         : state.runsCompleted % selectedWallets.length;
       const wallet = selectedWallets[wIdx];
 
-      // Determine swap amount
       const amount = state.config.amountMode === 'Fixed'
         ? state.config.amountBNB.toFixed(4)
         : state.config.amountMode === 'All'
@@ -52,7 +52,6 @@ export default function BotPage() {
         status: Math.random() > 0.05 ? 'Success' : 'Failed',
       });
 
-      // Schedule next tick; apply random delay if enabled
       const baseDelay = state.config.delay * 1000;
       const nextDelay = state.config.randomDelay
         ? Math.random() * baseDelay * 2 + 500
@@ -61,7 +60,6 @@ export default function BotPage() {
       timeoutId = window.setTimeout(runTick, nextDelay);
     };
 
-    // Start first tick after initial delay
     const initialDelay = config.randomDelay
       ? Math.random() * config.delay * 2000 + 500
       : config.delay * 1000;
@@ -78,20 +76,20 @@ export default function BotPage() {
         {/* Top Header / Breadcrumb */}
         <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur flex items-center justify-between px-6 shrink-0 z-10">
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground cursor-pointer hover:text-white transition-colors">Dashboard</span>
+            <span className="text-muted-foreground cursor-pointer hover:text-white transition-colors">{h.dashboard}</span>
             <span className="text-muted-foreground">/</span>
             <span className="text-white font-medium flex items-center gap-2">
-              BSC Anti-MEV Volume Bot 🤖
+              {h.botTitle}
             </span>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center bg-black/20 rounded-lg p-1 border border-white/5">
               <button className="px-3 py-1.5 text-xs text-muted-foreground hover:text-white flex items-center gap-2 rounded-md hover:bg-white/5 transition-colors">
-                <RefreshCcw className="w-3 h-3" /> Refresh
+                <RefreshCcw className="w-3 h-3" /> {h.refresh}
               </button>
               <div className="w-px h-4 bg-white/10 mx-1"></div>
               <button className="px-3 py-1.5 text-xs text-muted-foreground hover:text-white flex items-center gap-2 rounded-md hover:bg-white/5 transition-colors">
-                <X className="w-3 h-3" /> Close
+                <X className="w-3 h-3" /> {h.close}
               </button>
             </div>
             <button className="relative w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
@@ -105,9 +103,7 @@ export default function BotPage() {
         <div className="flex-1 overflow-y-auto scrollbar-custom p-6">
           <div className="max-w-[1600px] mx-auto space-y-6">
             
-            {/* Main Split Interface */}
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 min-h-[600px] xl:h-[calc(100vh-200px)]">
-              {/* Left Panel - Wallets */}
               <div className="xl:col-span-8 flex flex-col gap-6">
                 <div className="flex-1">
                   <WalletPanel />
@@ -117,13 +113,11 @@ export default function BotPage() {
                 </div>
               </div>
 
-              {/* Right Panel - Config */}
               <div className="xl:col-span-4 h-full">
                 <ConfigPanel />
               </div>
             </div>
 
-            {/* Bottom FAQ / Promo */}
             <div className="pt-8 pb-12">
               <FAQSection />
             </div>

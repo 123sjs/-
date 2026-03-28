@@ -7,12 +7,15 @@ import { formatAddress } from "@/lib/utils";
 import { Download, RefreshCw, Trash2, Banknote, ExternalLink, Copy, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useLang } from "@/i18n/useLang";
 
 export function WalletPanel() {
   const { wallets, toggleWalletSelection, setAllWalletSelection, deleteSelectedWallets, deleteWalletById, importWallets } = useBotStore();
   const [importOpen, setImportOpen] = React.useState(false);
   const [keysText, setKeysText] = React.useState("");
   const [revealedKeys, setRevealedKeys] = React.useState<Set<string>>(new Set());
+  const { t } = useLang();
+  const w = t.wallet;
 
   const handleImport = () => {
     if (keysText.trim()) {
@@ -42,35 +45,35 @@ export function WalletPanel() {
       {/* Tabs */}
       <div className="flex border-b border-border/50 bg-black/20">
         <button className="px-6 py-4 text-sm font-medium text-white border-b-2 border-primary bg-white/5">
-          Private Key Operation
+          {w.tabPrivKey}
         </button>
         <button className="px-6 py-4 text-sm font-medium text-muted-foreground hover:text-white transition-colors">
-          Wallet Operation
+          {w.tabWallet}
         </button>
       </div>
 
       {/* Actions Toolbar */}
       <div className="p-4 flex flex-wrap gap-2 items-center bg-black/10 border-b border-border/50">
         <Button size="sm" onClick={() => setImportOpen(true)} className="gap-2">
-          <Download className="w-4 h-4" /> Import Wallet
+          <Download className="w-4 h-4" /> {w.importWallet}
         </Button>
         <Button size="sm" variant="outline" className="gap-2">
-          <RefreshCw className="w-4 h-4 text-primary" /> Check balance
+          <RefreshCw className="w-4 h-4 text-primary" /> {w.checkBalance}
         </Button>
         
         <div className="w-px h-6 bg-border mx-1"></div>
         
         <Button size="sm" variant="ghost" onClick={() => setAllWalletSelection('zero')}>
-          Select Bal 0
+          {w.selectBal0}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setAllWalletSelection('positive')}>
-          Select Bal &gt; 0
+          {w.selectBalPos}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setAllWalletSelection('invert')}>
-          Invert
+          {w.invert}
         </Button>
-        <Button size="sm" variant="danger" onClick={deleteSelectedWallets} className="ml-auto" disabled={wallets.filter(w=>w.selected).length === 0}>
-          <Trash2 className="w-4 h-4 mr-1" /> Delete Selected
+        <Button size="sm" variant="danger" onClick={deleteSelectedWallets} className="ml-auto" disabled={wallets.filter(wl => wl.selected).length === 0}>
+          <Trash2 className="w-4 h-4 mr-1" /> {w.deleteSelected}
         </Button>
       </div>
 
@@ -81,8 +84,8 @@ export function WalletPanel() {
             <div className="w-16 h-16 mb-4 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
               <Banknote className="w-8 h-8 opacity-50" />
             </div>
-            <p className="text-sm">Please import wallet</p>
-            <Button size="sm" className="mt-4" onClick={() => setImportOpen(true)}>Import Now</Button>
+            <p className="text-sm">{w.noWallet}</p>
+            <Button size="sm" className="mt-4" onClick={() => setImportOpen(true)}>{w.importNow}</Button>
           </div>
         ) : (
           <table className="w-full text-sm text-left">
@@ -94,81 +97,81 @@ export function WalletPanel() {
                     onChange={() => setAllWalletSelection(allSelected ? 'none' : 'all')} 
                   />
                 </th>
-                <th className="p-4 font-medium">No.</th>
-                <th className="p-4 font-medium">Address ({wallets.length})</th>
+                <th className="p-4 font-medium">{w.colNo}</th>
+                <th className="p-4 font-medium">{w.colAddress} ({wallets.length})</th>
                 <th className="p-4 font-medium text-right">BNB</th>
                 <th className="p-4 font-medium text-right">USDT</th>
                 <th className="p-4 font-medium text-center">Nonce</th>
-                <th className="p-4 font-medium">Result</th>
-                <th className="p-4 font-medium text-center">Options</th>
+                <th className="p-4 font-medium">{w.colResult}</th>
+                <th className="p-4 font-medium text-center">{w.colOptions}</th>
               </tr>
             </thead>
             <tbody>
-              {wallets.map((w, i) => (
+              {wallets.map((wl, i) => (
                 <motion.tr 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 > 0.5 ? 0 : i * 0.05 }}
-                  key={w.id} 
+                  key={wl.id} 
                   className={cn(
                     "border-b border-white/5 transition-colors hover:bg-white/5",
-                    w.selected ? "bg-primary/5" : ""
+                    wl.selected ? "bg-primary/5" : ""
                   )}
                 >
                   <td className="p-4">
                     <Checkbox 
-                      checked={w.selected} 
-                      onChange={() => toggleWalletSelection(w.id)} 
+                      checked={wl.selected} 
+                      onChange={() => toggleWalletSelection(wl.id)} 
                     />
                   </td>
-                  <td className="p-4 text-muted-foreground font-mono text-xs">{w.index}</td>
+                  <td className="p-4 text-muted-foreground font-mono text-xs">{wl.index}</td>
                   <td className="p-4 font-mono text-white">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-primary/80 shrink-0"></div>
-                      <span>{formatAddress(w.address)}</span>
+                      <span>{formatAddress(wl.address)}</span>
                       <button
-                        onClick={() => copyAddress(w.address)}
+                        onClick={() => copyAddress(wl.address)}
                         className="text-muted-foreground hover:text-white transition-colors"
-                        title="Copy address"
+                        title={w.copyAddress}
                       >
                         <Copy className="w-3 h-3" />
                       </button>
                       <a
-                        href={`https://bscscan.com/address/${w.address}`}
+                        href={`https://bscscan.com/address/${wl.address}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-muted-foreground hover:text-primary transition-colors"
-                        title="View on BSCScan"
+                        title={w.viewOnScan}
                       >
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   </td>
-                  <td className="p-4 text-right font-mono text-emerald-400">{w.bnb.toFixed(4)}</td>
-                  <td className="p-4 text-right font-mono text-white">{w.usdt}</td>
-                  <td className="p-4 text-center font-mono text-muted-foreground">{w.nonce}</td>
+                  <td className="p-4 text-right font-mono text-emerald-400">{wl.bnb.toFixed(4)}</td>
+                  <td className="p-4 text-right font-mono text-white">{wl.usdt}</td>
+                  <td className="p-4 text-center font-mono text-muted-foreground">{wl.nonce}</td>
                   <td className="p-4">
-                    {w.result === '-' ? (
+                    {wl.result === '-' ? (
                       <span className="text-muted-foreground">-</span>
-                    ) : w.result.startsWith('✓') ? (
-                      <span className="text-emerald-400">{w.result}</span>
+                    ) : wl.result.startsWith('✓') ? (
+                      <span className="text-emerald-400">{wl.result}</span>
                     ) : (
-                      <span className="text-rose-400">{w.result}</span>
+                      <span className="text-rose-400">{wl.result}</span>
                     )}
                   </td>
                   <td className="p-4 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <button
-                        onClick={() => toggleReveal(w.id)}
+                        onClick={() => toggleReveal(wl.id)}
                         className="p-1.5 rounded text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
-                        title={revealedKeys.has(w.id) ? "Hide key" : "Show key"}
+                        title={revealedKeys.has(wl.id) ? w.hideKey : w.showKey}
                       >
-                        {revealedKeys.has(w.id) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        {revealedKeys.has(wl.id) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                       <button
-                        onClick={() => deleteWalletById(w.id)}
+                        onClick={() => deleteWalletById(wl.id)}
                         className="p-1.5 rounded text-muted-foreground hover:text-rose-400 hover:bg-rose-400/10 transition-colors"
-                        title="Delete wallet"
+                        title={w.deleteWallet}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -181,20 +184,18 @@ export function WalletPanel() {
         )}
       </div>
 
-      <AppDialog open={importOpen} onOpenChange={setImportOpen} title="Import Wallets">
+      <AppDialog open={importOpen} onOpenChange={setImportOpen} title={w.importDialogTitle}>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Paste your private keys below, one per line. They remain in your browser's local memory only.
-          </p>
+          <p className="text-sm text-muted-foreground">{w.importDialogDesc}</p>
           <textarea
             className="w-full h-48 bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-sm text-white focus:outline-none focus:border-primary transition-colors resize-none placeholder:text-white/20"
-            placeholder="0xabc123...&#10;0xdef456..."
+            placeholder={w.importPlaceholder}
             value={keysText}
             onChange={(e) => setKeysText(e.target.value)}
           ></textarea>
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="ghost" onClick={() => setImportOpen(false)}>Cancel</Button>
-            <Button onClick={handleImport} className="min-w-[120px]">Import</Button>
+            <Button variant="ghost" onClick={() => setImportOpen(false)}>{w.cancel}</Button>
+            <Button onClick={handleImport} className="min-w-[120px]">{w.import}</Button>
           </div>
         </div>
       </AppDialog>

@@ -2,28 +2,12 @@ import * as React from "react";
 import { ChevronDown, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
-
-const FAQs = [
-  {
-    q: "How to use BSC Anti-MEV Volume Bot 🤖?",
-    a: "1. Import all the wallets you want to brush volume.\n2. Ensure that all your wallets have enough balance.\n3. Fill in Config and click RUN 🚀"
-  },
-  {
-    q: "How to send multi-wallet amount to 1 wallet?",
-    a: "Use our BSC Batch Collection tool from the sidebar to easily consolidate funds."
-  },
-  {
-    q: "How much does BSC Anti-MEV Volume Bot cost per use?",
-    a: "Lowest service fee in the entire network, each volume brushing only 0.002 BNB. After opening VIP, the fee is 0 BNB!"
-  },
-  {
-    q: "CoinTool Is it safe to import wallets?",
-    a: "1. CoinTool will never record any private keys, and the code is open source for verification!\n2. All information is read locally and CoinTool has been running stably for many years without any security incidents."
-  }
-];
+import { useLang } from "@/i18n/useLang";
 
 export function FAQSection() {
   const [openIndex, setOpenIndex] = React.useState<number | null>(0);
+  const { t } = useLang();
+  const f = t.faq;
 
   return (
     <div className="space-y-6">
@@ -37,22 +21,20 @@ export function FAQSection() {
         <div className="relative z-10 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <h3 className="text-xl font-display font-bold text-white flex items-center gap-2">
-              <Crown className="w-5 h-5 text-amber-400" /> Upgrade to VIP
+              <Crown className="w-5 h-5 text-amber-400" /> {f.upgradeVip}
             </h3>
-            <p className="text-sm text-emerald-100/70 mt-1 max-w-md">
-              Get 0 BNB service fees on all bot transactions, priority MEV routes, and advanced analytics.
-            </p>
+            <p className="text-sm text-emerald-100/70 mt-1 max-w-md">{f.vipDesc}</p>
           </div>
           <Button variant="premium" className="shrink-0 whitespace-nowrap">
-            Open VIP Now
+            {f.openVip}
           </Button>
         </div>
       </div>
 
       <div className="bg-card rounded-2xl border border-border shadow-lg p-6">
-        <h3 className="text-lg font-display font-bold text-white mb-4">FAQs</h3>
+        <h3 className="text-lg font-display font-bold text-white mb-4">{f.faqTitle}</h3>
         <div className="space-y-2">
-          {FAQs.map((faq, i) => (
+          {f.faqs.map((faq, i) => (
             <div key={i} className="border border-white/5 rounded-xl bg-black/20 overflow-hidden">
               <button 
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}

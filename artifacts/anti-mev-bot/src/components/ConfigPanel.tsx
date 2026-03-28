@@ -8,25 +8,7 @@ import { AppDialog } from "./ui/app-dialog";
 import { SiBinance, SiEthereum, SiSolana } from "react-icons/si";
 import { Settings, Zap, Search, Layers, Play, Square, Activity, ChevronDown, Wifi, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const DEX_OPTIONS = [
-  { id: 'Auto(V3&V2)', label: '⚡️ Auto(V3&V2)' },
-  { id: 'MetaMask Swap', label: '🦊 MetaMask Swap' },
-  { id: 'Flap', label: 'Flap' },
-  { id: 'pancakeV2', label: '🥞 PancakeV2' },
-  { id: 'pancakePump', label: 'PumpSpringBoard' },
-  { id: 'FOUR.MEME', label: 'FOUR.MEME' },
-];
-
-const AMOUNT_MODES: Array<{ id: BotConfig['amountMode']; label: string }> = [
-  { id: 'All', label: 'All Amount' },
-  { id: 'Random', label: 'Random Amount' },
-  { id: 'Percent', label: 'Percent Amount %' },
-  { id: 'Fixed', label: 'Fixed Amount' },
-  { id: 'Fixed Retention', label: 'Fixed Retention' },
-];
-
-const GAS_MODES: Array<BotConfig['gasPriceMode']> = ['Fixed', 'Auto', 'Random'];
+import { useLang } from "@/i18n/useLang";
 
 type ChainOption = {
   id: string;
@@ -128,6 +110,27 @@ const MOCK_TOKENS = [
 
 export function ConfigPanel() {
   const { config, updateConfig, startBot, stopBot, isRunning, stats, runsCompleted } = useBotStore();
+  const { t } = useLang();
+  const c = t.config;
+
+  const DEX_OPTIONS = [
+    { id: 'Auto(V3&V2)', label: '⚡️ Auto(V3&V2)' },
+    { id: 'MetaMask Swap', label: '🦊 MetaMask Swap' },
+    { id: 'Flap', label: 'Flap' },
+    { id: 'pancakeV2', label: '🥞 PancakeV2' },
+    { id: 'pancakePump', label: 'PumpSpringBoard' },
+    { id: 'FOUR.MEME', label: 'FOUR.MEME' },
+  ];
+
+  const AMOUNT_MODES: Array<{ id: BotConfig['amountMode']; label: string }> = [
+    { id: 'All', label: c.allAmount },
+    { id: 'Random', label: c.randomAmount },
+    { id: 'Percent', label: c.percentAmount },
+    { id: 'Fixed', label: c.fixedAmount },
+    { id: 'Fixed Retention', label: c.fixedRetention },
+  ];
+
+  const GAS_MODES: Array<BotConfig['gasPriceMode']> = ['Fixed', 'Auto', 'Random'];
 
   // Token search state
   const [tokenSearch, setTokenSearch] = React.useState(MOCK_TOKENS[0].address);
@@ -138,14 +141,13 @@ export function ConfigPanel() {
 
   // Chain selector state
   const [chainDropdownOpen, setChainDropdownOpen] = React.useState(false);
-  const selectedChain = CHAINS.find(c => c.id === config.chain) ?? CHAINS[0];
+  const selectedChain = CHAINS.find(ch => ch.id === config.chain) ?? CHAINS[0];
   const chainRef = React.useRef<HTMLDivElement>(null);
 
   // RPC selector state
   const [rpcModalOpen, setRpcModalOpen] = React.useState(false);
   const currentRpc = selectedChain.rpcs.find(r => r.url === config.rpc) ?? selectedChain.rpcs[0];
 
-  // Handle click outside to close dropdowns
   React.useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (tokenRef.current && !tokenRef.current.contains(e.target as Node)) {
@@ -163,10 +165,10 @@ export function ConfigPanel() {
     setTokenSearch(value);
     if (value.length >= 2) {
       const q = value.toLowerCase();
-      const results = MOCK_TOKENS.filter(t => 
-        t.symbol.toLowerCase().includes(q) || 
-        t.name.toLowerCase().includes(q) || 
-        t.address.toLowerCase().includes(q)
+      const results = MOCK_TOKENS.filter(tok => 
+        tok.symbol.toLowerCase().includes(q) || 
+        tok.name.toLowerCase().includes(q) || 
+        tok.address.toLowerCase().includes(q)
       );
       setTokenResults(results);
       setTokenDropdownOpen(results.length > 0);
@@ -206,15 +208,13 @@ export function ConfigPanel() {
               <div className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
               <Activity className="w-6 h-6 text-primary" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Bot is Running</h3>
-            <p className="text-muted-foreground text-sm mb-6">
-              Executing volume swaps across MEV-protected routes. Please do not close this window.
-            </p>
+            <h3 className="text-xl font-bold text-white mb-2">{c.botRunning}</h3>
+            <p className="text-muted-foreground text-sm mb-6">{c.botRunningDesc}</p>
             <div className="w-full bg-black/30 rounded-lg p-4 mb-6 font-mono text-sm border border-white/5">
-              Runs: <span className="text-white">{runsCompleted}</span> / {config.repeatTimes}
+              {c.runs}: <span className="text-white">{runsCompleted}</span> / {config.repeatTimes}
             </div>
             <Button variant="danger" size="lg" className="w-full font-bold shadow-[0_0_20px_rgba(220,38,38,0.4)]" onClick={stopBot}>
-              <Square className="w-5 h-5 mr-2 fill-current" /> STOP BOT
+              <Square className="w-5 h-5 mr-2 fill-current" /> {c.stopBot}
             </Button>
           </div>
         </div>
@@ -224,16 +224,15 @@ export function ConfigPanel() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Layers className="w-4 h-4 text-primary" /> Token Configuration
+            <Layers className="w-4 h-4 text-primary" /> {c.tokenConfig}
           </h3>
           <div className="flex items-center gap-2 text-xs bg-black/20 px-3 py-1.5 rounded-full border border-white/5">
-            <span className="text-muted-foreground">Fixed BNB</span>
+            <span className="text-muted-foreground">{c.fixedBNB}</span>
             <Switch />
           </div>
         </div>
 
         <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
-          {/* Token search with dropdown */}
           <div ref={tokenRef} className="relative">
             <div className="flex gap-2">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border" style={{ backgroundColor: `${selectedToken.color}15`, borderColor: `${selectedToken.color}30`, color: selectedToken.color }}>
@@ -244,7 +243,7 @@ export function ConfigPanel() {
                 <input 
                   type="text" 
                   className="w-full h-12 bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 text-sm text-white focus:outline-none focus:border-primary transition-all"
-                  placeholder="Search by token or paste address..."
+                  placeholder={c.searchToken}
                   value={tokenSearch}
                   onChange={e => handleTokenSearch(e.target.value)}
                   onFocus={() => { if (tokenResults.length > 0) setTokenDropdownOpen(true); }}
@@ -252,7 +251,6 @@ export function ConfigPanel() {
               </div>
             </div>
 
-            {/* Token search dropdown */}
             {tokenDropdownOpen && tokenResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
                 {tokenResults.map(token => (
@@ -274,7 +272,7 @@ export function ConfigPanel() {
             )}
 
             <div className="flex items-center gap-3 mt-3">
-              <span className="text-xs text-muted-foreground">Selected:</span>
+              <span className="text-xs text-muted-foreground">{c.selected}</span>
               <div className="flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-mono font-medium border" style={{ backgroundColor: `${selectedToken.color}10`, borderColor: `${selectedToken.color}20`, color: selectedToken.color }}>
                 <div className="w-4 h-4 rounded-full flex items-center justify-center text-black text-[10px] font-bold" style={{ backgroundColor: selectedToken.color }}>
                   {selectedToken.badge}
@@ -285,18 +283,16 @@ export function ConfigPanel() {
           </div>
         </div>
 
-        {/* Chain & RPC selectors */}
         <div className="grid grid-cols-2 gap-4">
-          {/* Chain dropdown */}
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Chain (Id: {selectedChain.chainId})</label>
+            <label className="text-xs text-muted-foreground">{c.chain} (Id: {selectedChain.chainId})</label>
             <div ref={chainRef} className="relative">
               <button
                 onClick={() => setChainDropdownOpen(v => !v)}
                 className="w-full h-10 bg-black/20 border border-white/10 rounded-xl px-3 flex items-center gap-2 text-sm text-white hover:border-white/30 transition-colors"
               >
                 <ChainIcon className="shrink-0" style={{ color: selectedChain.color }} />
-                <span className="flex-1 text-left truncate">{selectedChain.shortLabel} Mainnet</span>
+                <span className="flex-1 text-left truncate">{selectedChain.shortLabel} {c.mainnet}</span>
                 <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", chainDropdownOpen && "rotate-180")} />
               </button>
               {chainDropdownOpen && (
@@ -323,10 +319,9 @@ export function ConfigPanel() {
             </div>
           </div>
 
-          {/* RPC selector */}
           <div className="space-y-2">
             <label className="text-xs text-muted-foreground flex justify-between">
-              RPC
+              {c.rpc}
               <span className="font-mono" style={{ color: currentRpc.latencyMs < 300 ? '#4ade80' : currentRpc.latencyMs < 500 ? '#facc15' : '#f87171' }}>
                 {currentRpc.latencyMs} MS
               </span>
@@ -350,28 +345,28 @@ export function ConfigPanel() {
       {/* SECTION 2: Bot Settings */}
       <div className="space-y-5">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-          <Settings className="w-4 h-4 text-primary" /> Execution Settings
+          <Settings className="w-4 h-4 text-primary" /> {c.executionSettings}
         </h3>
         
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-xs text-muted-foreground flex justify-between">
-              Send Delay(S) 
+              {c.sendDelay}
               <div className="flex items-center gap-1">
                 <Checkbox checked={config.randomDelay} onChange={(e) => updateConfig({randomDelay: e.target.checked})} />
-                <span className="text-[10px]">Random</span>
+                <span className="text-[10px]">{c.random}</span>
               </div>
             </label>
             <Input type="number" value={config.delay} onChange={e => updateConfig({delay: Number(e.target.value)})} />
           </div>
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Threads</label>
+            <label className="text-xs text-muted-foreground">{c.threads}</label>
             <Input type="number" value={config.threads} onChange={e => updateConfig({threads: Number(e.target.value)})} />
           </div>
         </div>
 
         <div className="space-y-3">
-          <label className="text-xs text-muted-foreground">DEX (MEV-protected)</label>
+          <label className="text-xs text-muted-foreground">{c.dex}</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {DEX_OPTIONS.map(dex => (
               <div 
@@ -391,7 +386,7 @@ export function ConfigPanel() {
         </div>
 
         <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
-          <label className="text-xs text-muted-foreground block mb-2">Swap Amount (BNB)</label>
+          <label className="text-xs text-muted-foreground block mb-2">{c.swapAmount}</label>
           <div className="flex flex-wrap gap-2">
             {AMOUNT_MODES.map(({ id, label }) => (
               <button
@@ -417,21 +412,21 @@ export function ConfigPanel() {
 
         <div className="grid grid-cols-2 gap-4 bg-black/20 border border-white/5 p-4 rounded-xl">
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Wallet Execution Order</label>
+            <label className="text-xs text-muted-foreground">{c.walletOrder}</label>
             <div className="flex bg-black/40 rounded-lg p-1">
               <button 
                 onClick={() => updateConfig({ executionOrder: 'Sequential' })}
                 className={cn("flex-1 text-xs py-1.5 rounded-md transition-colors", config.executionOrder === 'Sequential' ? "bg-white/10 text-white" : "text-muted-foreground")}
-              >Sequential</button>
+              >{c.sequential}</button>
               <button 
                 onClick={() => updateConfig({ executionOrder: 'Random' })}
                 className={cn("flex-1 text-xs py-1.5 rounded-md transition-colors", config.executionOrder === 'Random' ? "bg-white/10 text-white" : "text-muted-foreground")}
-              >Random</button>
+              >{c.random}</button>
             </div>
           </div>
           <div className="space-y-2">
             <label className="text-xs text-muted-foreground flex justify-between items-center">
-              Repeat Run
+              {c.repeatRun}
               <Switch checked={config.repeatRun} onChange={e => updateConfig({ repeatRun: e.target.checked })} />
             </label>
             <Input 
@@ -449,13 +444,13 @@ export function ConfigPanel() {
       {/* SECTION 3: Gas */}
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-white flex items-center gap-2 justify-between">
-          <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-[#F3BA2F]" /> Gas Setting</span>
+          <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-[#F3BA2F]" /> {c.gasSetting}</span>
           <span className="text-xs font-normal text-muted-foreground bg-black/20 px-2 py-1 rounded-full border border-white/5 font-mono">Current: 0.10 gwei</span>
         </h3>
         
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-3">
-            <label className="text-xs text-muted-foreground block">Gas Price (gwei)</label>
+            <label className="text-xs text-muted-foreground block">{c.gasPrice}</label>
             <div className="flex bg-black/40 rounded-lg p-1">
               {GAS_MODES.map(m => (
                 <button 
@@ -468,12 +463,12 @@ export function ConfigPanel() {
             <Input type="number" step="0.01" value={config.gasPrice} onChange={e => updateConfig({gasPrice: Number(e.target.value)})} />
             
             <label className="text-xs text-muted-foreground flex justify-between items-center pt-2">
-              EIP-1559 <Switch checked={config.eip1559} onChange={e => updateConfig({eip1559: e.target.checked})} />
+              {c.eip1559} <Switch checked={config.eip1559} onChange={e => updateConfig({eip1559: e.target.checked})} />
             </label>
           </div>
 
           <div className="space-y-3">
-            <label className="text-xs text-muted-foreground block">Gas Limit</label>
+            <label className="text-xs text-muted-foreground block">{c.gasLimit}</label>
             <div className="flex bg-black/40 rounded-lg p-1">
               {GAS_MODES.map(m => (
                 <button 
@@ -494,26 +489,26 @@ export function ConfigPanel() {
       <div className="bg-primary/5 border border-primary/20 rounded-xl p-5 space-y-4">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">Estimate Service Fee</div>
+            <div className="text-muted-foreground text-xs">{c.estimateFee}</div>
             <div className="font-mono text-white">0.004 BNB</div>
           </div>
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">Estimate Volume</div>
+            <div className="text-muted-foreground text-xs">{c.estimateVolume}</div>
             <div className="font-mono text-emerald-400 font-bold">{stats.volume.toFixed(4)} BNB <span className="text-muted-foreground font-normal text-xs">≈ ${(stats.volume * 608).toFixed(2)}</span></div>
           </div>
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">Increased Txns</div>
+            <div className="text-muted-foreground text-xs">{c.increasedTxns}</div>
             <div className="font-mono text-white text-xs">Buy {stats.buyTx} + Sell {stats.sellTx} = <span className="font-bold text-sm">{stats.buyTx + stats.sellTx}</span></div>
           </div>
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">BNB Price</div>
+            <div className="text-muted-foreground text-xs">{c.bnbPrice}</div>
             <div className="font-mono text-white">$608</div>
           </div>
         </div>
       </div>
 
       <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500/80 p-3 rounded-lg text-xs leading-relaxed">
-        If it is a tax token, please add the contract address to the whitelist: <span className="font-mono text-amber-400 select-all">0xeB85C4e28aF444ce60Df31B6c670034c7f167c0a</span>
+        {c.taxTokenNote} <span className="font-mono text-amber-400 select-all">0xeB85C4e28aF444ce60Df31B6c670034c7f167c0a</span>
       </div>
 
       <Button 
@@ -522,13 +517,13 @@ export function ConfigPanel() {
         className="w-full text-lg h-14 font-bold tracking-wide"
         onClick={startBot}
       >
-        <Play className="w-5 h-5 mr-2 fill-black" /> RUN BOT
+        <Play className="w-5 h-5 mr-2 fill-black" /> {c.runBot}
       </Button>
 
       {/* RPC Selection Modal */}
-      <AppDialog open={rpcModalOpen} onOpenChange={setRpcModalOpen} title="Select RPC Endpoint">
+      <AppDialog open={rpcModalOpen} onOpenChange={setRpcModalOpen} title={c.rpcModalTitle}>
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground mb-4">Choose an RPC endpoint for <span className="text-white font-medium">{selectedChain.label}</span>. Lower latency is better.</p>
+          <p className="text-sm text-muted-foreground mb-4">{c.rpcModalDesc} <span className="text-white font-medium">{selectedChain.label}</span>. {c.lowerLatency}</p>
           {selectedChain.rpcs.map((rpc, i) => (
             <button
               key={i}

@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import BotPage from "@/pages/BotPage";
 import LaunchPipelinePage from "@/pages/LaunchPipelinePage";
 import NotFound from "@/pages/not-found";
+import { LangProvider } from "@/i18n/useLang";
 
 const queryClient = new QueryClient();
 
@@ -14,27 +15,27 @@ function Router() {
       <Route path="/" component={BotPage} />
       <Route path="/dashboard" component={BotPage} />
       <Route path="/launch-pipeline" component={LaunchPipelinePage} />
-      {/* Fallback all other routes to BotPage for the prototype experience */}
       <Route component={BotPage} />
     </Switch>
   );
 }
 
 function App() {
-  // Apply dark class to body globally for the theme to take effect 
-  if (typeof document !== 'undefined') {
-    document.documentElement.classList.add('dark');
+  if (typeof document !== "undefined") {
+    document.documentElement.classList.add("dark");
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <LangProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </LangProvider>
   );
 }
 
