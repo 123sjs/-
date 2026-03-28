@@ -186,6 +186,22 @@ export function initTelegramBot(): void {
   botInitialized = true;
   bot = new Telegraf(TELEGRAM_BOT_TOKEN);
 
+  // 自检：deleteWebhook + getMe，确认当前连接的是哪一只 bot
+  bot.telegram.deleteWebhook().then(() => {
+    logger.info("✅ deleteWebhook 已执行（确保使用长轮询模式）");
+  }).catch((err: unknown) => {
+    logger.warn({ err: String(err) }, "⚠️  deleteWebhook 失败（不影响运行）");
+  });
+
+  bot.telegram.getMe().then((me) => {
+    logger.info(
+      { botId: me.id, botUsername: me.username, botName: me.first_name },
+      "🤖 当前连接的 Bot：@" + me.username + "（ID: " + me.id + "）",
+    );
+  }).catch((err: unknown) => {
+    logger.error({ err: String(err) }, "❌ getMe 失败，请检查 TELEGRAM_BOT_TOKEN 是否正确");
+  });
+
   // 打印审批链路状态（只打一次，启动时明确告知）
   if (APPROVAL_ENABLED) {
     logger.info(
