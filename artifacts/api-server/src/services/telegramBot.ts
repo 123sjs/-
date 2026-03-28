@@ -435,14 +435,37 @@ export function initTelegramBot(): void {
     }
   });
 
-  bot.launch().catch((err) => {
-    logger.error({ err: String(err) }, "Telegram bot launch error");
+  // 手动轮询——绕过 telegraf bot.launch() 的 AbortSignal 兼容性问题
+  let pollingOffset = 0;
+  let pollingActive = true;
+
+  async function pollUpdates(): Promise<void> {
+    while (pollingActive) {
+      try {
+        const updates = await bot!.telegram.getUpdates(30, 100, pollingOffset, undefined);
+        for (const update of updates) {
+          pollingOffset = update.update_id + 1;
+          bot!.handleUpdate(update).catch((err: unknown) => {
+            logger.error({ err: String(err) }, "Telegram update handler error");
+          });
+        }
+      } catch (err) {
+        if (pollingActive) {
+          logger.warn({ err: String(err) }, "Telegram poll error, retrying in 3s");
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
+    }
+  }
+
+  pollUpdates().catch((err) => {
+    logger.error({ err: String(err) }, "Telegram polling fatal error");
   });
 
-  process.once("SIGINT", () => bot?.stop("SIGINT"));
-  process.once("SIGTERM", () => bot?.stop("SIGTERM"));
+  process.once("SIGINT", () => { pollingActive = false; bot?.stop("SIGINT"); });
+  process.once("SIGTERM", () => { pollingActive = false; bot?.stop("SIGTERM"); });
 
-  logger.info("Telegram bot started (long polling)");
+  logger.info("Telegram bot started (manual long polling)");
 }
 
 export async function sendCandidateForApproval(candidate: Candidate): Promise<boolean> {
