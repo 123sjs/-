@@ -12,6 +12,14 @@ import { logger } from "../lib/logger";
 const TELEGRAM_BOT_TOKEN = process.env["TELEGRAM_BOT_TOKEN"];
 const TELEGRAM_ADMIN_CHAT_ID = process.env["TELEGRAM_ADMIN_CHAT_ID"];
 
+/** ADMIN_CHAT_ID 只有为纯数字时才真正合法（群组为负数） */
+function isValidChatId(id: string | undefined): boolean {
+  return Boolean(id && /^-?\d+$/.test(id.trim()));
+}
+
+/** 审批消息发送是否可用：Token 已设置 且 ADMIN_CHAT_ID 合法 */
+const APPROVAL_ENABLED = Boolean(TELEGRAM_BOT_TOKEN) && isValidChatId(TELEGRAM_ADMIN_CHAT_ID);
+
 let bot: Telegraf | null = null;
 let botInitialized = false;
 
@@ -49,8 +57,14 @@ function validateFieldInput(field: PendingField, value: string): string | null {
   return null;
 }
 
+/** 机器人是否已启动（用于 /chatid 等命令） */
 export function isTelegramEnabled(): boolean {
-  return Boolean(TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID);
+  return Boolean(TELEGRAM_BOT_TOKEN);
+}
+
+/** 审批消息是否可以发送（Token 有效 + ADMIN_CHAT_ID 合法数字） */
+export function isApprovalEnabled(): boolean {
+  return APPROVAL_ENABLED && bot !== null;
 }
 
 export function getBot(): Telegraf | null {
@@ -168,13 +182,22 @@ export function initTelegramBot(): void {
     logger.warn("TELEGRAM_BOT_TOKEN 未配置 — Telegram 机器人已禁用");
     return;
   }
-  if (!TELEGRAM_ADMIN_CHAT_ID) {
-    logger.warn("TELEGRAM_ADMIN_CHAT_ID 未配置 — Telegram 机器人已禁用");
-    return;
-  }
 
   botInitialized = true;
   bot = new Telegraf(TELEGRAM_BOT_TOKEN);
+
+  // 打印审批链路状态（只打一次，启动时明确告知）
+  if (APPROVAL_ENABLED) {
+    logger.info(
+      { adminChatId: TELEGRAM_ADMIN_CHAT_ID },
+      "✅ 审批消息发送功能已启用：ADMIN_CHAT_ID 合法",
+    );
+  } else {
+    logger.warn(
+      { adminChatId: TELEGRAM_ADMIN_CHAT_ID ?? "未配置" },
+      "⚠️  管理员群未配置正确，审批消息发送功能当前已禁用。请在群内发送 /chatid 获取正确 ID 后重启。",
+    );
+  }
 
   bot.command("start", (ctx) => {
     ctx.reply("✅ Anti-MEV 发射机器人已就绪。候选代币将在此处等待审批。");
@@ -199,7 +222,57 @@ export function initTelegramBot(): void {
       `${match ? "✅ 匹配，消息可以发送到这里" : "❌ 不匹配！请将 TELEGRAM_ADMIN_CHAT_ID 设置为 " + id}`,
       { parse_mode: "Markdown" },
     );
-    logger.info({ chatId: id, type, configuredId, match }, "Telegram /chatid 命令执行");
+    logger.info({ chatId: id, type, configuredId, match }, "【/chatid】命令执行");
+  });
+
+  // /testapproval — 仅用于本地验收，发送一条假候选审批消息
+  bot.command("testapproval", async (ctx) => {
+    logger.info({ chatId: ctx.chat.id }, "【/testapproval】收到测试审批命令");
+
+    if (!APPROVAL_ENABLED || !TELEGRAM_ADMIN_CHAT_ID) {
+      await ctx.reply(
+        "❌ 审批发送功能未启用。\n" +
+        "请先将 TELEGRAM_ADMIN_CHAT_ID 设置为本群的数字 ID（见 /chatid），然后重启服务。",
+      );
+      return;
+    }
+
+    const fakeCandidate = {
+      id: 0,
+      tokenName: "测试代币 TEST",
+      tokenSymbol: "TEST",
+      description: "这是一条用于验收测试的假候选消息，不会被真实发射。",
+      narrative: "测试叙事：验收审批链路",
+      riskLevel: "low" as const,
+      suggestedChain: "both",
+      status: "pending_review",
+      bscBuyTier: "safe",
+      solBuyTier: "safe",
+      scoreTotal: 88,
+      telegramMessageId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    try {
+      const message = await bot!.telegram.sendMessage(
+        TELEGRAM_ADMIN_CHAT_ID,
+        buildCandidateMessage(fakeCandidate as unknown as Candidate),
+        {
+          parse_mode: "MarkdownV2",
+          ...buildApprovalKeyboard(0),
+        },
+      );
+      await ctx.reply(`✅ 测试审批消息已发送（消息 ID：${message.message_id}）。\n请验证消息格式和按钮是否正常。`);
+      logger.info(
+        { messageId: message.message_id, chatId: TELEGRAM_ADMIN_CHAT_ID },
+        "【/testapproval】测试消息发送成功",
+      );
+    } catch (err) {
+      const errStr = String(err);
+      await ctx.reply(`❌ 发送失败：${errStr.slice(0, 200)}`);
+      logger.error({ err: errStr }, "【/testapproval】测试消息发送失败");
+    }
   });
 
   bot.on("text", async (ctx, next) => {
@@ -490,7 +563,10 @@ export function initTelegramBot(): void {
 }
 
 export async function sendCandidateForApproval(candidate: Candidate): Promise<boolean> {
-  if (!bot || !TELEGRAM_ADMIN_CHAT_ID) return false;
+  if (!APPROVAL_ENABLED || !bot || !TELEGRAM_ADMIN_CHAT_ID) {
+    // 不打 log，由调度器统一输出一次"审批已禁用"日志，避免刷屏
+    return false;
+  }
 
   try {
     const message = await bot.telegram.sendMessage(

@@ -5,7 +5,7 @@ import { runBuildCandidates } from "./buildCandidates";
 import { db } from "@workspace/db";
 import { candidatesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { sendCandidateForApproval, isTelegramEnabled } from "../services/telegramBot";
+import { sendCandidateForApproval, isApprovalEnabled } from "../services/telegramBot";
 
 let schedulerStarted = false;
 
@@ -15,6 +15,9 @@ let schedulerStarted = false;
  */
 const lastSendAttemptMs = new Map<number, number>();
 const SEND_RETRY_INTERVAL_MS = 15 * 60 * 1000; // 15 分钟内不重试同一候选
+
+/** 审批禁用时只打一次警告，不每轮刷屏 */
+let approvalDisabledLoggedOnce = false;
 
 export function startScheduler(): void {
   if (schedulerStarted) {
@@ -50,7 +53,17 @@ export function startScheduler(): void {
 
   // 每 5 分钟向 Telegram 发送待审核候选
   cron.schedule("*/5 * * * *", async () => {
-    if (!isTelegramEnabled()) return;
+    if (!isApprovalEnabled()) {
+      if (!approvalDisabledLoggedOnce) {
+        approvalDisabledLoggedOnce = true;
+        logger.warn(
+          "【Telegram 通知】审批发送功能未启用（TELEGRAM_ADMIN_CHAT_ID 未配置或格式不合法），本轮跳过。配置正确后重启服务即可恢复。",
+        );
+      }
+      return;
+    }
+    // 审批已启用，重置日志标志（以便下次禁用时能再打一次）
+    approvalDisabledLoggedOnce = false;
 
     try {
       const pending = await db

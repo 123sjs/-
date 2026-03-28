@@ -36,13 +36,19 @@ export function validateStartupEnv(): void {
 
   const chatId = process.env["TELEGRAM_ADMIN_CHAT_ID"];
   if (!chatId) {
-    errors.push("❌ TELEGRAM_ADMIN_CHAT_ID 未配置（必须设置才能发送审批消息）");
+    // 未配置：不退出，但审批功能禁用
+    logger.warn(
+      "⚠️  TELEGRAM_ADMIN_CHAT_ID 未配置。" +
+      "管理员群未配置正确，审批消息发送功能当前已禁用。" +
+      "请先将机器人拉进管理员群，再通过 /chatid 获取正确群组 ID 并填入 Replit Secrets。",
+    );
   } else if (!/^-?\d+$/.test(chatId.trim())) {
-    // 格式错误：警告但不退出，以便用户可以通过 /chatid 命令获取正确的 ID
+    // 格式错误：不退出，但审批功能禁用；服务可启动以便 /chatid 命令可用
     logger.warn(
       `⚠️  TELEGRAM_ADMIN_CHAT_ID 格式不合法：当前值="${chatId}"。` +
+      `管理员群未配置正确，审批消息发送功能当前已禁用。` +
       `应为纯数字，群组 ID 通常为负数，如 -1001234567890。` +
-      `请向机器人发送 /chatid 命令获取正确的 ID，然后更新环境变量。`,
+      `请在管理员群发送 /chatid，复制机器人回复的负数 ID，填入 Replit Secrets 后重启。`,
     );
   } else {
     logger.info({ chatId }, "✅ TELEGRAM_ADMIN_CHAT_ID 已读取");

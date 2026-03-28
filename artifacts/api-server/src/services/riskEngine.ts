@@ -31,7 +31,9 @@ const POLITICAL_TERMS = [
 
 const DISASTER_TERMS = [
   "earthquake", "tsunami", "hurricane", "famine", "pandemic", "plague",
-  "war", "warfare", "wartime", "nuclear", "explosion", "crash", "collapse", "bankrupt",
+  "war",
+  "warfare", "wartime", // 新增高风险关键词：warfare、wartime（规则补充，非 bug 修复）
+  "nuclear", "explosion", "crash", "collapse", "bankrupt",
   "fukushima", "chernobyl", "titanic",
 ];
 
