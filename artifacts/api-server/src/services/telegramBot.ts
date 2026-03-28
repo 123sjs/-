@@ -213,14 +213,17 @@ export function initTelegramBot(): void {
   bot.command("chatid", (ctx) => {
     const id = ctx.chat.id;
     const type = ctx.chat.type;
-    const configuredId = TELEGRAM_ADMIN_CHAT_ID;
-    const match = String(id) === configuredId;
+    const configuredId = TELEGRAM_ADMIN_CHAT_ID ?? "未配置";
+    const match = String(id) === TELEGRAM_ADMIN_CHAT_ID;
+    const matchLine = match
+      ? "✅ 匹配，消息可以发送到这里"
+      : "❌ 不匹配！请将 TELEGRAM_ADMIN_CHAT_ID 设置为 " + id;
+    // 纯文本回复，不使用 parse_mode，避免任何 Markdown/HTML 解析异常
     ctx.reply(
-      `🆔 当前 Chat ID：\`${id}\`\n` +
-      `📋 类型：${type}\n` +
-      `⚙️ 已配置 ADMIN_CHAT_ID：\`${configuredId ?? "未配置"}\`\n` +
-      `${match ? "✅ 匹配，消息可以发送到这里" : "❌ 不匹配！请将 TELEGRAM_ADMIN_CHAT_ID 设置为 " + id}`,
-      { parse_mode: "Markdown" },
+      "当前 Chat ID: " + id + "\n" +
+      "类型: " + type + "\n" +
+      "已配置 ADMIN_CHAT_ID: " + configuredId + "\n" +
+      matchLine,
     );
     logger.info({ chatId: id, type, configuredId, match }, "【/chatid】命令执行");
   });
