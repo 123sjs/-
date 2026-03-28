@@ -31,7 +31,7 @@ const POLITICAL_TERMS = [
 
 const DISASTER_TERMS = [
   "earthquake", "tsunami", "hurricane", "famine", "pandemic", "plague",
-  "war", "nuclear", "explosion", "crash", "collapse", "bankrupt",
+  "war", "warfare", "wartime", "nuclear", "explosion", "crash", "collapse", "bankrupt",
   "fukushima", "chernobyl", "titanic",
 ];
 
@@ -125,5 +125,40 @@ export function clearRiskCooldowns(): void {
   const cutoff = Date.now() - DUPLICATE_COOLDOWN_HOURS * 3_600_000;
   for (const [key, ts] of recentTopics.entries()) {
     if (ts < cutoff) recentTopics.delete(key);
+  }
+}
+
+/**
+ * 风险引擎自检：输出 4 条最小测试用例结果。
+ * 在服务启动时调用，用于验证 word-boundary 修复和链名白名单是否正确。
+ */
+export function runRiskEngineTests(): void {
+  const cases: Array<{ label: string; text: string; term: string[]; expectMatch: boolean }> = [
+    { label: "reward 不应命中 war",       text: "staking rewards for users",  term: DISASTER_TERMS, expectMatch: false },
+    { label: "warfare 应命中 war",         text: "warfare strategy token",     term: DISASTER_TERMS, expectMatch: true  },
+    { label: "Solana 不应被品牌词拦截",    text: "Solana meme token launch",   term: BRAND_TERMS,    expectMatch: false },
+    { label: "BNB ecosystem 不应被品牌词拦截", text: "BNB ecosystem rewards",  term: BRAND_TERMS,    expectMatch: false },
+  ];
+
+  let passed = 0;
+  let failed = 0;
+
+  for (const c of cases) {
+    const matched = containsAnyTerm(c.text, c.term);
+    const didMatch = matched.length > 0;
+    const ok = didMatch === c.expectMatch;
+    if (ok) {
+      passed++;
+      logger.info({ 测试: c.label, 结果: "✅ 通过", 匹配词: matched.length > 0 ? matched : "无" }, "【风控自检】");
+    } else {
+      failed++;
+      logger.error({ 测试: c.label, 结果: "❌ 失败", 期望命中: c.expectMatch, 实际命中: didMatch, 匹配词: matched }, "【风控自检】");
+    }
+  }
+
+  if (failed === 0) {
+    logger.info({ 通过: passed, 失败: failed }, "【风控自检】全部通过");
+  } else {
+    logger.error({ 通过: passed, 失败: failed }, "【风控自检】存在失败项，请检查风控逻辑");
   }
 }

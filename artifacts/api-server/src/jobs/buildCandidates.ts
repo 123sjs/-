@@ -35,9 +35,11 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
     let skipped = 0;
     const errors: Array<{ topic: string; error: string }> = [];
 
+    logger.info({ 话题总数: topics.length }, "【候选生成】开始处理话题列表");
+
     for (const topic of topics) {
       try {
-        logger.info({ topic: topic.topic }, "Generating candidate for topic");
+        logger.info({ 话题: topic.topic }, "【候选生成】正在生成 AI 候选");
 
         const payload = await generateCandidate(topic.topic);
 
@@ -52,8 +54,8 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
         if (!riskResult.passed) {
           skipped++;
           logger.warn(
-            { topic: topic.topic, flags: riskResult.flags },
-            "Candidate blocked by risk engine",
+            { 话题: topic.topic, 代币名: payload.tokenName, 拦截原因: riskResult.flags },
+            "【风控】候选被拦截",
           );
 
           await db.insert(auditLogsTable).values({
@@ -113,13 +115,13 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
 
         created++;
         logger.info(
-          { candidateId: candidate!.id, tokenName: payload.tokenName },
-          "Candidate created",
+          { candidateId: candidate!.id, 代币名: payload.tokenName, 符号: payload.tokenSymbol },
+          "【候选生成】新候选已入库",
         );
       } catch (err) {
         const errorMsg = String(err);
         errors.push({ topic: topic.topic, error: errorMsg });
-        logger.error({ err: errorMsg, topic: topic.topic }, "Failed to generate candidate");
+        logger.error({ err: errorMsg, 话题: topic.topic }, "【候选生成】生成失败");
 
         await db.insert(auditLogsTable).values({
           action: "candidate_generation_failed",
@@ -131,10 +133,15 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
       }
     }
 
+    logger.info(
+      { 处理话题数: topics.length, 新建候选数: created, 风控拦截数: skipped, 错误数: errors.length },
+      "【候选生成】本轮结束：抓取话题 → 生成候选 → 风控过滤 完成",
+    );
+
     return { ok: true, processed: topics.length, created, skipped, errors };
   } catch (err) {
     const error = String(err);
-    logger.error({ err: error }, "Build candidates job failed");
+    logger.error({ err: error }, "【候选生成】整体任务失败");
     return { ok: false, error };
   }
 }

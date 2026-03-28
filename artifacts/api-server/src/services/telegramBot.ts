@@ -13,6 +13,7 @@ const TELEGRAM_BOT_TOKEN = process.env["TELEGRAM_BOT_TOKEN"];
 const TELEGRAM_ADMIN_CHAT_ID = process.env["TELEGRAM_ADMIN_CHAT_ID"];
 
 let bot: Telegraf | null = null;
+let botInitialized = false;
 
 type PendingField = "tokenName" | "tokenSymbol" | "description";
 interface PendingInput {
@@ -159,26 +160,46 @@ function cleanExpiredPendingInputs() {
 }
 
 export function initTelegramBot(): void {
+  if (botInitialized) {
+    logger.warn("Telegram 机器人已在运行，忽略重复初始化请求");
+    return;
+  }
   if (!TELEGRAM_BOT_TOKEN) {
-    logger.warn("TELEGRAM_BOT_TOKEN not set — Telegram bot disabled");
+    logger.warn("TELEGRAM_BOT_TOKEN 未配置 — Telegram 机器人已禁用");
     return;
   }
   if (!TELEGRAM_ADMIN_CHAT_ID) {
-    logger.warn("TELEGRAM_ADMIN_CHAT_ID not set — Telegram bot disabled");
+    logger.warn("TELEGRAM_ADMIN_CHAT_ID 未配置 — Telegram 机器人已禁用");
     return;
   }
 
+  botInitialized = true;
   bot = new Telegraf(TELEGRAM_BOT_TOKEN);
 
   bot.command("start", (ctx) => {
-    ctx.reply("✅ Anti-MEV Launch Bot ready. Candidates will be sent here for approval.");
+    ctx.reply("✅ Anti-MEV 发射机器人已就绪。候选代币将在此处等待审批。");
   });
 
   bot.command("status", async (ctx) => {
     const candidates = await db.select().from(candidatesTable);
     const pending = candidates.filter((c) => c.status === "pending_review").length;
     const approved = candidates.filter((c) => c.status.startsWith("approved")).length;
-    ctx.reply(`📊 Candidates: ${candidates.length} total | ${pending} pending | ${approved} approved`);
+    ctx.reply(`📊 候选代币：共 ${candidates.length} 个 | 待审核 ${pending} 个 | 已批准 ${approved} 个`);
+  });
+
+  bot.command("chatid", (ctx) => {
+    const id = ctx.chat.id;
+    const type = ctx.chat.type;
+    const configuredId = TELEGRAM_ADMIN_CHAT_ID;
+    const match = String(id) === configuredId;
+    ctx.reply(
+      `🆔 当前 Chat ID：\`${id}\`\n` +
+      `📋 类型：${type}\n` +
+      `⚙️ 已配置 ADMIN_CHAT_ID：\`${configuredId ?? "未配置"}\`\n` +
+      `${match ? "✅ 匹配，消息可以发送到这里" : "❌ 不匹配！请将 TELEGRAM_ADMIN_CHAT_ID 设置为 " + id}`,
+      { parse_mode: "Markdown" },
+    );
+    logger.info({ chatId: id, type, configuredId, match }, "Telegram /chatid 命令执行");
   });
 
   bot.on("text", async (ctx, next) => {
@@ -465,7 +486,7 @@ export function initTelegramBot(): void {
   process.once("SIGINT", () => { pollingActive = false; bot?.stop("SIGINT"); });
   process.once("SIGTERM", () => { pollingActive = false; bot?.stop("SIGTERM"); });
 
-  logger.info("Telegram bot started (manual long polling)");
+  logger.info("Telegram 机器人已启动（手动长轮询）");
 }
 
 export async function sendCandidateForApproval(candidate: Candidate): Promise<boolean> {
@@ -491,10 +512,25 @@ export async function sendCandidateForApproval(candidate: Candidate): Promise<bo
       chatId: TELEGRAM_ADMIN_CHAT_ID,
     });
 
-    logger.info({ candidateId: candidate.id, messageId: message.message_id }, "Candidate sent to Telegram");
+    logger.info(
+      { candidateId: candidate.id, tokenName: candidate.tokenName, chatId: TELEGRAM_ADMIN_CHAT_ID, messageId: message.message_id },
+      "✅ 候选代币审批消息已发送至 Telegram",
+    );
     return true;
   } catch (err) {
-    logger.error({ err: String(err), candidateId: candidate.id }, "Failed to send candidate to Telegram");
+    const errStr = String(err);
+    let hint = "";
+    if (errStr.includes("chat not found")) {
+      hint = "【提示】chat not found：TELEGRAM_ADMIN_CHAT_ID 配置的群/频道 ID 不正确，请向机器人发送 /chatid 获取正确 ID";
+    } else if (errStr.includes("Unauthorized") || errStr.includes("401")) {
+      hint = "【提示】Unauthorized：Bot Token 无效，请从 BotFather 重新获取";
+    } else if (errStr.includes("bot was kicked") || errStr.includes("not a member")) {
+      hint = "【提示】机器人还未加入目标群组，请先将机器人添加为群成员";
+    }
+    logger.error(
+      { err: errStr, candidateId: candidate.id, tokenName: candidate.tokenName, chatId: TELEGRAM_ADMIN_CHAT_ID, hint: hint || undefined },
+      "❌ 候选代币审批消息发送失败",
+    );
     return false;
   }
 }
