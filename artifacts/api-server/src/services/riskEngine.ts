@@ -14,10 +14,9 @@ const CELEBRITY_NAMES = [
 
 const BRAND_TERMS = [
   "apple", "google", "amazon", "microsoft", "tesla", "nvidia", "meta",
-  "twitter", "x.com", "tiktok", "youtube", "facebook", "instagram",
+  "twitter", "tiktok", "youtube", "facebook", "instagram",
   "paypal", "visa", "mastercard", "binance", "coinbase", "opensea",
-  "uniswap", "aave", "compound", "chainlink", "polygon", "solana",
-  "ethereum", "bitcoin", "bnb", "usdt", "usdc", "busd", "wbtc",
+  "uniswap", "aave", "compound", "chainlink",
 ];
 
 const POLITICAL_TERMS = [
@@ -42,16 +41,13 @@ const DUPLICATE_COOLDOWN_HOURS = 72;
 
 const recentTopics = new Map<string, number>();
 
-function normalize(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 function containsAnyTerm(text: string, terms: string[]): string[] {
-  const normalized = normalize(text);
   const matched: string[] = [];
   for (const term of terms) {
-    const normTerm = normalize(term);
-    if (normalized.includes(normTerm)) {
+    // Use word-boundary regex so "war" does NOT match inside "reward", "forward", etc.
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${escaped}\\b`, "i");
+    if (re.test(text)) {
       matched.push(term);
     }
   }
