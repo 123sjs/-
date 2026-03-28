@@ -29,6 +29,7 @@ export interface BuyResult {
   amountSpent?: string;
   walletLabel?: string;
   isStub?: boolean;
+  isAwaitingMint?: boolean;
   errorMessage?: string;
 }
 

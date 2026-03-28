@@ -148,24 +148,38 @@ router.post("/admin/run-launch/:jobId", async (req, res) => {
       const br = await adapter.opsBuy(opsBuyPayload);
       buyResult = br;
 
+      const newStatus = br.ok
+        ? "bought"
+        : (br.isAwaitingMint || br.isStub)
+          ? "deployed"
+          : "failed";
+
+      const errorMsg = br.ok
+        ? null
+        : br.isStub
+          ? `[stub] ${br.errorMessage}`
+          : (br.errorMessage ?? null);
+
       await db.update(launchJobsTable).set({
-        status: br.ok ? "bought" : (br.isStub ? "deployed" : "failed"),
+        status: newStatus,
         opsWalletLabel: br.walletLabel ?? null,
         buyTxHash: br.txHash ?? null,
         buyAmount: br.amountSpent ?? null,
         boughtAt: br.ok ? new Date() : null,
-        errorMessage: br.ok ? null : (br.isStub ? `[stub] ${br.errorMessage}` : (br.errorMessage ?? null)),
+        errorMessage: errorMsg,
         updatedAt: new Date(),
       }).where(eq(launchJobsTable.id, jobId));
 
-      await writeAuditLog(br.ok ? "ops_buy_success" : (br.isStub ? "ops_buy_stub" : "ops_buy_failed"), "launch_job", jobId, "api", {
-        tier: job.buyTier,
-        txHash: br.txHash,
-        amount: br.amountSpent,
-        walletLabel: br.walletLabel,
-        isStub: br.isStub,
-        error: br.errorMessage,
-      });
+      if (!br.isAwaitingMint) {
+        await writeAuditLog(br.ok ? "ops_buy_success" : (br.isStub ? "ops_buy_stub" : "ops_buy_failed"), "launch_job", jobId, "api", {
+          tier: job.buyTier,
+          txHash: br.txHash,
+          amount: br.amountSpent,
+          walletLabel: br.walletLabel,
+          isStub: br.isStub,
+          error: br.errorMessage,
+        });
+      }
     } else {
       await db.update(launchJobsTable).set({ status: "bought", updatedAt: new Date() }).where(eq(launchJobsTable.id, jobId));
     }

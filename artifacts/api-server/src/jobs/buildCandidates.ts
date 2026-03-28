@@ -89,6 +89,8 @@ export async function runBuildCandidates(limitTopics = 5): Promise<BuildCandidat
             narrative: payload.narrative,
             logoUrl,
             riskLevel: payload.riskLevel,
+            scoreTotal: riskResult.score,
+            riskFlags: riskResult.flags.length > 0 ? riskResult.flags : null,
             suggestedChain: payload.suggestedChain,
             status: "pending_review",
             aiRawOutput: payload as unknown as Record<string, unknown>,

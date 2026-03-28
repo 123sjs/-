@@ -227,6 +227,7 @@ export class PumpAdapter extends LaunchAdapter {
       return {
         ok: false,
         isStub: false,
+        isAwaitingMint: true,
         errorMessage: "Token mint address not set yet. Complete manual pump.fun launch, then call PATCH /admin/launch-jobs/:id/contract to set contractAddress.",
         walletLabel: "sol_ops_buy",
       };
